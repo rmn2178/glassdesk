@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "GLASSDESK",
-  "version": "2.0.0",
-  "identifier": "com.glassdesk.overlay",
+  "productName": "NotchGlass",
+  "version": "0.1.0",
+  "identifier": "com.notchglass.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -10,14 +10,13 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "withGlobalTauri": false,
     "windows": [
       {
         "label": "main",
-        "title": "GLASSDESK",
-        "width": 440,
-        "height": 54,
-        "x": 0,
+        "title": "NotchGlass",
+        "width": 640,
+        "height": 420,
+        "x": 360,
         "y": 0,
         "transparent": true,
         "decorations": false,
@@ -25,13 +24,12 @@
         "skipTaskbar": true,
         "resizable": false,
         "shadow": false,
-        "dragDropEnabled": true,
         "visible": true,
         "focus": false
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: asset: https://asset.localhost; style-src 'self' 'unsafe-inline'"
+      "csp": null
     }
   },
   "bundle": {

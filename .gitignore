@@ -1,17 +1,12 @@
-# Dependencies & Build Outputs
+# Dependencies & build outputs
 node_modules/
 dist/
+dist-artifacts/
 src-tauri/target/
-src-tauri/gen/
 
-# SQLite & Local Runtime Data
-*.db
-*.db-shm
-*.db-wal
-
-# OS & Editor Files
+# OS & editor files
 .DS_Store
 Thumbs.db
+*.log
 .vscode/
 .idea/
-*.log

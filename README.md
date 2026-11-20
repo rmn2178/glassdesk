@@ -1,52 +1,67 @@
-# GLASSDESK — Windows 11 Liquid Glass Dynamic Island
+# NotchGlass
 
-A production-grade, macOS-inspired **Liquid Glass Dynamic Island** desktop overlay for **Windows 11**, engineered with **Rust**, **Tauri 2**, **WinRT SMTC**, **Win32/COM**, **SQLite (`rusqlite`)**, and **TypeScript**.
+A native **Windows 10 (v2004+) & Windows 11 Dynamic Island / MacBook-Style Notch** productivity hub inspired by [NotchPixel](https://notchpixel.com/), built with **Rust (Tauri 2 + Win32/WinRT + SQLite + Axum)** and **React 18 + TypeScript + Vite**.
 
-## Highlights
+## Key Features
 
-- **macOS 26-Inspired Liquid Glass & Harmonic Spring Physics**
-  - Concentric nested geometry (`24 px` floating panel → `16 px` inner cards → `10 px` nested controls), multi-layer specular rim highlights, energizing hover/click inner glow, and pointer-tracked radial caustics.
-  - Frame-rate-independent damped harmonic oscillator spring physics (`60 Hz–240 Hz`) with a self-sleeping `requestAnimationFrame` loop (**0% idle CPU**).
-  - Draggable, movable floating macOS-style panels (Settings, Music, FILE HOLD, Tasks, Calendar, Quick Controls) with traffic-light header controls and double-click recenter.
-- **Native Windows 11 Live Music Controls (WinRT SMTC)**
-  - Reads real **Now Playing** track title, artist, album, source app, and playback state from **Spotify, YouTube (Chrome/Edge), Apple Music, VLC, and Windows Media Player** via `GlobalSystemMediaTransportControlsSessionManager`.
-  - Live animated equalizer pill inside the Dynamic Island + expanded Liquid Glass **Now Playing** panel with Previous, Play/Pause, Next, and real master volume control (with Win32 media-key fallback).
-- **Two-Way Native FILE HOLD Shelf (Drag IN + Drag OUT)**
-  - **Drag IN**: Drop single or multiple files/folders from Windows Explorer onto the top bar (`onDragDropEvent`) with a breathing Liquid Glass drop zone and 48×48 JPEG thumbnails.
-  - **Drag OUT**: Grab any held file chip and drag it natively out of GLASSDESK into Windows Explorer, Desktop, Chrome, Discord, or any app via native Windows OLE (`drag` crate).
-  - **File Safety**: Stores path references in SQLite (`held_files`) — never moves or deletes originals — with optional independent **Copy to Vault**, missing-file detection, search, categories, and sorting.
-- **Real Windows 11 System Status & Productivity Suite**
-  - Foreground app tracking (ignoring GLASSDESK itself), keyboard layout (`GetKeyboardLayout`), battery & charging (`GetSystemPowerStatus`), throttled master volume (`IAudioEndpointVolume`), network status (`INetworkListManager`), and direct `ms-settings:` shortcuts.
-  - SQLite-backed **Task Manager** (inline edit, deadlines, reminders, priorities, categories) and **Clock & Calendar** with interactive Quick Reminders.
-- **Memory & Storage Optimized**
-  - Size-optimized Rust release binary (`opt-level = "z"`, LTO, `panic = "abort"`, stripped), bounded 2 MB SQLite cache with incremental auto-vacuum, automatic hidden-panel DOM unloading, Windows working-set trim (`SetProcessWorkingSetSize`), and adaptive idle polling.
+- **Dual Geometry & 11 Themes**: Switch live between **Floating Dynamic Island** and **MacBook-style Notch** across 11 themes (`Liquid Glass`, `Pure Black`, `Black`, `Graphite`, `Acrylic`, `Candy Glass`, `Rosé`, `Lavender`, `Peach`, `Sakura`, `Pure White`) with adjustable glass blur, corner radius, and hover open delay.
+- **Music & Synced Lyrics**: Native Windows SMTC media controls (Spotify, YouTube in browsers, Apple Music, VLC, etc.), 30 fps canvas visualizer (rounded or pixel bars), and live synced lyrics via [LRCLIB](https://lrclib.net/).
+- **File Shelf & Send to Phone**: Drag-and-drop staging shelf (up to 12 files) + ephemeral LAN HTTP server with 128-bit random token and instant QR code download (zero phone app required).
+- **Clipboard History**: Persistent SQLite clipboard watcher (`All`, `Text`, `Links`, `Files`) with search, pinning, one-click re-copy, and configurable retention.
+- **Widgets & Reminders**: Live Weather ([Open-Meteo](https://open-meteo.com/)), Pomodoro Focus Timer, Day Progress, PC Telemetry, Quick Calculator, SQLite To-Do list, and repeating Reminders with Snooze/Done.
+- **Quick Controls, Privacy Sensors & Game Strip**: Windows master volume slider, Global Mic Mute (`Ctrl+Alt+M`), Screen Color Picker (`Ctrl+Alt+C`), Lock PC, active Mic/Camera privacy indicator dots (Windows `CapabilityAccessManager`), and automatic Fullscreen Game Strip.
+- **AI Agent Monitor & Local API (`127.0.0.1:47823`)**: Track Claude Code, Codex, Antigravity, Hermes, or custom agents via `POST /notify`, `POST /tile`, and the bundled `notch-cli.exe` binary.
+- **PC Deck (Smartphone Browser Remote)**: Local Wi-Fi WebSocket remote (Trackpad, Keyboard, Media, Slides, Movies) with 2-minute expiring QR pairing and PC-side Allow/Deny confirmation.
 
-## Automated Windows x64 Compilation (GitHub Actions)
+## Push to GitHub & Build Automatically (GitHub Actions)
 
-Push this repository to GitHub to automatically compile Windows x64 binaries on `windows-latest` via `.github/workflows/build.yml`:
+This repository includes `.github/workflows/build-windows.yml`, which automatically compiles Windows x64 binaries on every push to `main`/`master` or tag push (`v*`):
 
-1. Push to `main` (or trigger manually via **Actions → Build GLASSDESK (Windows x64) → Run workflow**).
-2. Download the compiled artifacts:
-   - `GLASSDESK-Windows-x64-NSIS-Installer` (`.exe` installer)
-   - `GLASSDESK-Windows-x64-MSI-Installer` (`.msi` installer)
-   - `GLASSDESK-Windows-x64-Portable` (standalone `glassdesk.exe`)
-3. Push a version tag (`git tag v1.1.0 && git push --tags`) to publish a GitHub Release automatically.
+```bash
+git init
+git add .
+git commit -m "Initial NotchGlass release"
+git branch -M main
+git remote add origin https://github.com/<your-username>/notchglass.git
+git push -u origin main
+```
 
-## Local Windows 11 Development
+1. Open your GitHub repository → **Actions** tab → **Build NotchGlass (Windows x64)**.
+2. Download the **`NotchGlass-Windows-x64`** artifact containing:
+   - `NotchGlass_0.1.0_x64-setup.exe` (NSIS installer)
+   - `NotchGlass_0.1.0_x64_en-US.msi` (WiX MSI installer)
+   - `NotchGlass-portable-x64.exe` (standalone portable binary)
+   - `notch-cli-x64.exe` (companion CLI for AI agent hooks)
+3. To publish a GitHub Release automatically:
+   ```bash
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+## Local Development (Windows)
+
+Requirements: [Node.js 20+](https://nodejs.org/), [Rust stable](https://rustup.rs/), and Microsoft Visual Studio C++ Build Tools.
 
 ```powershell
 npm install
 npm run tauri dev
 ```
 
-### Build & Test Locally
+## Companion CLI Usage (`notch-cli.exe`)
 
 ```powershell
-npm run build
-cd src-tauri && cargo test && cd ..
-npx tauri build --bundles "nsis,msi"
+notch-cli notify --agent claude-code --status needs_input --title "Approve Edit" --body "Ready to apply diff"
+notch-cli tile --id build --label "Cargo Build" --value "82%" --progress 0.82
 ```
 
-## License
+## Default Global Shortcuts
 
-Released under the [MIT License](./LICENSE).
+| Shortcut | Action |
+| :--- | :--- |
+| `Ctrl + Alt + N` | Expand / Collapse Island |
+| `Ctrl + Alt + H` | Show / Hide Island |
+| `Ctrl + Alt + P` | Media Play / Pause |
+| `Ctrl + Alt + M` | Global Microphone Mute |
+| `Ctrl + Alt + C` | Instant Cursor Color Picker (`#HEX`) |
+
+See [`PLAN.md`](./PLAN.md) for the full architectural blueprint and module specification.

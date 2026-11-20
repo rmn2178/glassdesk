@@ -1,0 +1,74 @@
+name: Build NotchGlass (Windows x64)
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Typecheck and build frontend
+        run: |
+          npx tsc --noEmit
+          npm run build
+
+      - name: Build companion CLI (notch-cli.exe)
+        working-directory: src-tauri
+        run: cargo build --release --bin notch-cli
+
+      - name: Build NotchGlass Windows App & Installers (NSIS + MSI)
+        run: npx tauri build --bundles nsis,msi
+
+      - name: Stage release artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist-artifacts | Out-Null
+          Copy-Item "src-tauri/target/release/notchglass.exe" "dist-artifacts/NotchGlass-portable-x64.exe"
+          Copy-Item "src-tauri/target/release/notch-cli.exe" "dist-artifacts/notch-cli-x64.exe"
+          Get-ChildItem "src-tauri/target/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue | Copy-Item -Destination "dist-artifacts/"
+          Get-ChildItem "src-tauri/target/release/bundle/msi/*.msi" -ErrorAction SilentlyContinue | Copy-Item -Destination "dist-artifacts/"
+          Get-ChildItem "dist-artifacts"
+
+      - name: Upload Windows build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: NotchGlass-Windows-x64
+          path: dist-artifacts/*
+          retention-days: 30
+
+      - name: Create GitHub Release (on tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-artifacts/*
+          generate_release_notes: true
