@@ -12,12 +12,12 @@ use axum::{
 };
 use chrono::Utc;
 use qrcode::{render::svg, QrCode};
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::oneshot;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -106,8 +106,7 @@ impl PcDeckManager {
     pub async fn start(&self, app: AppHandle) -> Result<PcDeckStatus, String> {
         self.stop();
 
-        let token_bytes: [u8; 12] = rand::thread_rng().gen();
-        let pair_token = hex::encode(token_bytes);
+        let pair_token = Uuid::new_v4().simple().to_string();
         let expires_at = Utc::now().timestamp() + 120; // 2-minute pairing window
 
         let ip = local_ip_address::local_ip()

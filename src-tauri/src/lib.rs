@@ -317,7 +317,7 @@ fn register_shortcuts(app: &AppHandle) {
     for (combo, event_name) in shortcuts {
         let ev = event_name.to_string();
         let _ = app.global_shortcut().on_shortcut(combo, move |app_handle, _shortcut, event| {
-            if event.state == ShortcutState::Pressed {
+            if event.state() == ShortcutState::Pressed {
                 match ev.as_str() {
                     "hotkey-media-play-pause" => {
                         let _ = media::media_command("play_pause");

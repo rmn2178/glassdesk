@@ -42,6 +42,10 @@ jobs:
           npx tsc --noEmit
           npm run build
 
+      - name: Verify Rust compilation (cargo check)
+        working-directory: src-tauri
+        run: cargo check --all-targets
+
       - name: Build companion CLI (notch-cli.exe)
         working-directory: src-tauri
         run: cargo build --release --bin notch-cli

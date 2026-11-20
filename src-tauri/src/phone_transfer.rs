@@ -6,11 +6,11 @@ use axum::{
     Router,
 };
 use qrcode::{render::svg, QrCode};
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,8 +57,7 @@ impl PhoneTransferManager {
             return Err("No valid files on the shelf to share.".to_string());
         }
 
-        let token_bytes: [u8; 16] = rand::thread_rng().gen();
-        let token = hex::encode(token_bytes);
+        let token = Uuid::new_v4().simple().to_string();
         let ip = local_ip_address::local_ip()
             .map(|i| i.to_string())
             .unwrap_or_else(|_| "127.0.0.1".to_string());
