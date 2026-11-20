@@ -1,8 +1,9 @@
 [package]
 name = "glassdesk"
-version = "1.0.0"
-description = "GLASSDESK — Windows 11 Liquid Glass Dynamic Island Desktop Overlay"
+version = "2.0.0"
+description = "GLASSDESK — Windows 11 macOS-Inspired Liquid Glass Dynamic Island Overlay"
 authors = ["GLASSDESK"]
+license = "MIT"
 edition = "2021"
 
 [lib]
@@ -24,9 +25,12 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp", "gif"] }
+drag = "2"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [
+    "Foundation",
+    "Media_Control",
     "Win32_Foundation",
     "Win32_Globalization",
     "Win32_Graphics_Gdi",
@@ -43,7 +47,8 @@ windows = { version = "0.58", features = [
 ] }
 
 [profile.release]
-opt-level = 3
+opt-level = "z"
 lto = true
 codegen-units = 1
+panic = "abort"
 strip = true

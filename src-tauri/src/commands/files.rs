@@ -1,6 +1,6 @@
 use crate::database::{self, DbState, HeldFile, HoldFilesBatchResult, QuickFolder};
 use crate::win_api;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
 pub fn hold_file(
@@ -96,4 +96,12 @@ pub fn list_quick_folders(state: State<'_, DbState>) -> Result<Vec<QuickFolder>,
 #[tauri::command]
 pub fn delete_quick_folder(state: State<'_, DbState>, id: String) -> Result<(), String> {
     database::delete_folder(&state, &id)
+}
+
+#[tauri::command]
+pub fn start_native_file_drag(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Main overlay window not found".to_string())?;
+    win_api::start_native_file_drag(&window, paths)
 }

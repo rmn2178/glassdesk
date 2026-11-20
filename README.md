@@ -1,46 +1,52 @@
-# GLASSDESK — Windows 11 Dynamic Island Desktop Overlay
+# GLASSDESK — Windows 11 Liquid Glass Dynamic Island
 
-A slim, top-edge floating Liquid Glass desktop overlay for Windows 11 built with **Rust**, **Tauri 2**, **SQLite (`rusqlite`)**, **TypeScript**, and native **Win32 / COM APIs**.
+A production-grade, macOS-inspired **Liquid Glass Dynamic Island** desktop overlay for **Windows 11**, engineered with **Rust**, **Tauri 2**, **WinRT SMTC**, **Win32/COM**, **SQLite (`rusqlite`)**, and **TypeScript**.
 
-## Core Features
+## Highlights
 
-- **Native Top-Edge Floating Overlay**: 34 px collapsed bar attached flush to the top screen edge (`WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE`), transparent, borderless, hidden from the taskbar and Alt-Tab, and dynamically resized only when a panel expands so the desktop below stays 100% usable.
-- **Dynamic Island Capsule**: Interactive center glass pill with spring hover bloom, live clock, held file count, pending task count, and smooth click-to-expand attached Liquid Glass panels (dismissible via outside click or `Escape`).
-- **FILE HOLD Shelf**: Drag single or multiple files/folders directly from Windows Explorer onto the top bar. Persists path references in SQLite (`held_files`), generates 64×64 thumbnails for images, detects missing files, supports **Open**, **Reveal in Explorer**, **Copy Path**, optional **Copy to Vault** (never moves or deletes originals), category filters, search, and sorting.
-- **Real Windows 11 System Status & Quick Controls**: Live foreground app name, keyboard layout (`ENG`, etc.), real battery percentage & charging state (`GetSystemPowerStatus`), real master volume slider & mute (`IAudioEndpointVolume`), live network status (`INetworkListManager`), and direct `ms-settings:` shortcuts.
-- **Clock, Calendar & Task Manager**: Lightweight clock ticker (updates only text nodes, zero full re-renders), 12h/24h formats, monthly calendar with deadline dots, and SQLite-backed tasks across `College`, `Personal`, `Projects`, and `Other` categories.
-- **Auto-Hide & Multi-Monitor Ready**: Optional full-screen app/game auto-hide (`SHQueryUserNotificationState`), customizable global shortcut (`Alt+Space` default), Dark/Light/Automatic themes, accent swatches, and monitor selection.
+- **macOS 26-Inspired Liquid Glass & Harmonic Spring Physics**
+  - Concentric nested geometry (`24 px` floating panel → `16 px` inner cards → `10 px` nested controls), multi-layer specular rim highlights, energizing hover/click inner glow, and pointer-tracked radial caustics.
+  - Frame-rate-independent damped harmonic oscillator spring physics (`60 Hz–240 Hz`) with a self-sleeping `requestAnimationFrame` loop (**0% idle CPU**).
+  - Draggable, movable floating macOS-style panels (Settings, Music, FILE HOLD, Tasks, Calendar, Quick Controls) with traffic-light header controls and double-click recenter.
+- **Native Windows 11 Live Music Controls (WinRT SMTC)**
+  - Reads real **Now Playing** track title, artist, album, source app, and playback state from **Spotify, YouTube (Chrome/Edge), Apple Music, VLC, and Windows Media Player** via `GlobalSystemMediaTransportControlsSessionManager`.
+  - Live animated equalizer pill inside the Dynamic Island + expanded Liquid Glass **Now Playing** panel with Previous, Play/Pause, Next, and real master volume control (with Win32 media-key fallback).
+- **Two-Way Native FILE HOLD Shelf (Drag IN + Drag OUT)**
+  - **Drag IN**: Drop single or multiple files/folders from Windows Explorer onto the top bar (`onDragDropEvent`) with a breathing Liquid Glass drop zone and 48×48 JPEG thumbnails.
+  - **Drag OUT**: Grab any held file chip and drag it natively out of GLASSDESK into Windows Explorer, Desktop, Chrome, Discord, or any app via native Windows OLE (`drag` crate).
+  - **File Safety**: Stores path references in SQLite (`held_files`) — never moves or deletes originals — with optional independent **Copy to Vault**, missing-file detection, search, categories, and sorting.
+- **Real Windows 11 System Status & Productivity Suite**
+  - Foreground app tracking (ignoring GLASSDESK itself), keyboard layout (`GetKeyboardLayout`), battery & charging (`GetSystemPowerStatus`), throttled master volume (`IAudioEndpointVolume`), network status (`INetworkListManager`), and direct `ms-settings:` shortcuts.
+  - SQLite-backed **Task Manager** (inline edit, deadlines, reminders, priorities, categories) and **Clock & Calendar** with interactive Quick Reminders.
+- **Memory & Storage Optimized**
+  - Size-optimized Rust release binary (`opt-level = "z"`, LTO, `panic = "abort"`, stripped), bounded 2 MB SQLite cache with incremental auto-vacuum, automatic hidden-panel DOM unloading, Windows working-set trim (`SetProcessWorkingSetSize`), and adaptive idle polling.
 
-## Automatic Windows Compilation (GitHub Actions)
+## Automated Windows x64 Compilation (GitHub Actions)
 
 Push this repository to GitHub to automatically compile Windows x64 binaries on `windows-latest` via `.github/workflows/build.yml`:
 
-1. Create a new GitHub repository and push all files to `main`.
-2. Open the **Actions** tab and run (or wait for) **Build GLASSDESK (Windows x64)**.
-3. Download the generated artifacts:
+1. Push to `main` (or trigger manually via **Actions → Build GLASSDESK (Windows x64) → Run workflow**).
+2. Download the compiled artifacts:
    - `GLASSDESK-Windows-x64-NSIS-Installer` (`.exe` installer)
    - `GLASSDESK-Windows-x64-MSI-Installer` (`.msi` installer)
    - `GLASSDESK-Windows-x64-Portable` (standalone `glassdesk.exe`)
-4. Tag a release (e.g., `git tag v1.0.0 && git push --tags`) to automatically publish a GitHub Release with all installers attached.
+3. Push a version tag (`git tag v1.1.0 && git push --tags`) to publish a GitHub Release automatically.
 
-## Local Development on Windows 11
+## Local Windows 11 Development
 
-### Prerequisites
-- [Rust (MSVC toolchain)](https://rustup.rs/) 1.77.2+
-- [Node.js](https://nodejs.org/) 20 LTS
-- Microsoft Edge WebView2 Runtime (pre-installed on Windows 11)
-- Visual Studio C++ Build Tools (Desktop development with C++)
-
-### Run Locally
 ```powershell
 npm install
 npm run tauri dev
 ```
 
-### Run Tests & Build Installers Locally
+### Build & Test Locally
+
 ```powershell
-npm run typecheck
 npm run build
 cd src-tauri && cargo test && cd ..
-npm run tauri build -- --bundles nsis,msi
+npx tauri build --bundles "nsis,msi"
 ```
+
+## License
+
+Released under the [MIT License](./LICENSE).

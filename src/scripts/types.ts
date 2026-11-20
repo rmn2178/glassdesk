@@ -4,7 +4,21 @@ export type PanelName =
   | "calendar"
   | "tasks"
   | "controls"
+  | "notifications"
+  | "music"
   | "settings";
+
+export type SettingsCategory =
+  | "general"
+  | "appearance"
+  | "island"
+  | "controls"
+  | "tasks"
+  | "files"
+  | "notifications"
+  | "shortcuts"
+  | "performance"
+  | "about";
 
 export type FileCategory = "all" | "documents" | "images" | "videos" | "other";
 export type TaskCategory = "College" | "Personal" | "Projects" | "Other";
@@ -56,6 +70,15 @@ export interface ReminderItem {
   createdAt: string;
 }
 
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  category: string;
+  read: boolean;
+  createdAt: string;
+}
+
 export interface ActiveWindowInfo {
   title: string;
   executable: string;
@@ -74,6 +97,7 @@ export interface AudioStatus {
   volume: number;
   volumePercent: number;
   muted: boolean;
+  outputDevice: string;
 }
 
 export interface NetworkStatus {
@@ -93,6 +117,15 @@ export interface MonitorDescriptor {
   isPrimary: boolean;
 }
 
+export interface MediaSessionInfo {
+  hasSession: boolean;
+  title: string;
+  artist: string;
+  album: string;
+  sourceApp: string;
+  isPlaying: boolean;
+}
+
 export interface SystemSnapshot {
   activeWindow: ActiveWindowInfo;
   battery: BatteryStatus;
@@ -100,6 +133,7 @@ export interface SystemSnapshot {
   audio: AudioStatus;
   network: NetworkStatus;
   isFullscreenActive: boolean;
+  media: MediaSessionInfo;
 }
 
 export interface AppState {
@@ -107,8 +141,13 @@ export interface AppState {
   heldFiles: HeldFile[];
   tasks: TaskItem[];
   reminders: ReminderItem[];
+  notifications: NotificationItem[];
   settings: Record<string, string>;
   system: SystemSnapshot | null;
   monitors: MonitorDescriptor[];
   autostart: boolean;
+  focusMode: boolean;
+  dndMode: boolean;
+  timerRemainingSec: number;
+  timerRunning: boolean;
 }

@@ -1,0 +1,14 @@
+# GLASSDESK Liquid Glass Windows 11 Upgrade
+
+- [x] Milestone 1: Project Inspection, Architecture Audit & Toolchain Verification
+  - Audited existing Tauri 2 + Rust (`windows = "0.58"`, `rusqlite = "0.32"`, `drag = "2"`) + TypeScript/Vite project in `project/GLASSDESK`.
+  - Identified critical Rust compile bug in `src-tauri/src/win_api.rs` (lines 51-65): duplicate `#[derive]`/`#[serde]` on `MediaSessionInfo` and missing `#[derive(Serialize)]` on `SystemSnapshot`.
+  - Verified sandbox environment: Node v18.20.4, npm 9.2.0, Python 3, Chromium available.
+- [x] Milestone 2: Liquid Glass Design System, Dynamic Island, Control Center, Settings & Productivity UI
+  - Built 3-tier Liquid Glass CSS system (`global.css`, `glass.css`, `island.css`, `panels.css`) with customizable opacity, blur, corner radius, shadow intensity, motion scale, and Low-GPU/no-blur fallback.
+  - Upgraded `index.html`, `island.ts`, `controls.ts`, `settings.ts`, `notifications.ts`, `clock.ts`, `dragdrop.ts`, and `main.ts` with Floating Dynamic Island pill, 6+ mode switcher dock, macOS-inspired Control Center (6 sections + live Focus Timer + DND), 2-pane macOS Settings (10 categories + live glass preview), and Mode F Notifications Center.
+- [x] Milestone 3: Rust Backend, Windows 11 Integration, Persistence & IPC Wiring
+  - Fixed `SystemSnapshot`/`MediaSessionInfo` derive bug in `win_api.rs`, added floating pill click-through bounds (`floating_width`, `horizontal_offset`, `always_on_top`), `output_device` on `AudioStatus`, and expanded `ms-settings:` URI whitelist.
+  - Added `notifications` table, CRUD, 25+ new default settings, and `test_notifications_crud` unit test in `database.rs`.
+  - Wired notification commands (`commands/tasks.rs`), floating bounds (`commands/system.rs`), multi-shortcut registration (`commands/settings.rs`, `lib.rs`), aligned versions to `2.0.0`, and enhanced `.github/workflows/build.yml`.
+- [/] Milestone 4: CI-Style Compilation Verification, Automated Tests & Deliverable Packaging

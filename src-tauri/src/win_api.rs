@@ -25,6 +25,7 @@ pub struct AudioStatus {
     pub volume: f32,
     pub volume_percent: u8,
     pub muted: bool,
+    pub output_device: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,6 +51,17 @@ pub struct MonitorDescriptor {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MediaSessionInfo {
+    pub has_session: bool,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub source_app: String,
+    pub is_playing: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SystemSnapshot {
     pub active_window: ActiveWindowInfo,
     pub battery: BatteryStatus,
@@ -57,6 +69,7 @@ pub struct SystemSnapshot {
     pub audio: AudioStatus,
     pub network: NetworkStatus,
     pub is_fullscreen_active: bool,
+    pub media: MediaSessionInfo,
 }
 
 // ============================================================================
@@ -71,6 +84,10 @@ mod imp {
     use std::path::Path;
     use std::process::Command;
     use windows::core::{PCWSTR, PWSTR};
+    use windows::Media::Control::{
+        GlobalSystemMediaTransportControlsSessionManager,
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus,
+    };
     use windows::Win32::Foundation::{
         CloseHandle, BOOL, HWND, LPARAM, RECT, RPC_E_CHANGED_MODE,
     };
@@ -89,19 +106,22 @@ mod imp {
     };
     use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
     use windows::Win32::System::Threading::{
-        OpenProcess, QueryFullProcessImageNameW, CREATE_NO_WINDOW, PROCESS_NAME_WIN32,
-        PROCESS_QUERY_LIMITED_INFORMATION,
+        GetCurrentProcess, OpenProcess, QueryFullProcessImageNameW, SetProcessWorkingSetSize,
+        CREATE_NO_WINDOW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
     };
-    use windows::Win32::UI::Input::KeyboardAndMouse::GetKeyboardLayout;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        keybd_event, GetKeyboardLayout, KEYEVENTF_KEYUP, VK_MEDIA_NEXT_TRACK,
+        VK_MEDIA_PLAY_PAUSE, VK_MEDIA_PREV_TRACK,
+    };
     use windows::Win32::UI::Shell::{
         SHQueryUserNotificationState, ShellExecuteW, QUNS_BUSY, QUNS_PRESENTATION_MODE,
         QUNS_RUNNING_D3D_FULL_SCREEN,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
         GetForegroundWindow, GetWindowLongW, GetWindowTextW, GetWindowThreadProcessId,
-        SetWindowLongW, SetWindowPos, GWL_EXSTYLE, HWND_TOPMOST, SWP_FRAMECHANGED,
-        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_SHOWNORMAL,
-        WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+        SetWindowLongW, SetWindowPos, GWL_EXSTYLE, HWND_NOTOPMOST, HWND_TOPMOST, SWP_FRAMECHANGED,
+        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_SHOWNORMAL, WS_EX_NOACTIVATE,
+        WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
     };
 
     struct ComGuard {
@@ -302,12 +322,14 @@ mod imp {
                 volume: clamped,
                 volume_percent: (clamped * 100.0).round() as u8,
                 muted,
+                output_device: "Default Output".to_string(),
             })
         })
         .unwrap_or(AudioStatus {
             volume: 0.0,
             volume_percent: 0,
             muted: true,
+            output_device: "No Output Device".to_string(),
         })
     }
 
@@ -321,6 +343,7 @@ mod imp {
                 volume: clamped,
                 volume_percent: (clamped * 100.0).round() as u8,
                 muted,
+                output_device: "Default Output".to_string(),
             })
         })
     }
@@ -342,6 +365,7 @@ mod imp {
                 volume: vol,
                 volume_percent: (vol * 100.0).round() as u8,
                 muted: next_muted,
+                output_device: "Default Output".to_string(),
             })
         })
     }
@@ -532,6 +556,9 @@ mod imp {
         logical_height: u32,
         focusable: bool,
         monitor_index: Option<usize>,
+        floating_width: Option<u32>,
+        horizontal_offset: i32,
+        always_on_top: bool,
     ) -> Result<(), String> {
         let monitors = enumerate_monitors(window);
         let target = monitor_index
@@ -544,15 +571,33 @@ mod imp {
             None => (0, 0, 1920, 1080, 1.0),
         };
 
-        let clamped_logical = logical_height.clamp(28, 800);
+        let clamped_logical = logical_height.clamp(28, 860);
         let phys_height = ((clamped_logical as f64) * scale)
             .round()
-            .min((mon_h as f64) * 0.85) as i32;
+            .min((mon_h as f64) * 0.88) as i32;
+
+        let (win_x, win_w) = match floating_width {
+            Some(fw) => {
+                let phys_w = ((fw.clamp(280, 1200) as f64) * scale)
+                    .round()
+                    .min(mon_w as f64) as i32;
+                let phys_off = ((horizontal_offset as f64) * scale).round() as i32;
+                let centered = mon_x + ((mon_w as i32 - phys_w) / 2) + phys_off;
+                let max_x = mon_x + (mon_w as i32 - phys_w).max(0);
+                (centered.clamp(mon_x, max_x), phys_w)
+            }
+            None => (mon_x, mon_w as i32),
+        };
 
         let hwnd = window_to_hwnd(window)?;
         unsafe {
             let mut ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
-            ex_style |= (WS_EX_TOOLWINDOW.0 as i32) | (WS_EX_TOPMOST.0 as i32);
+            ex_style |= WS_EX_TOOLWINDOW.0 as i32;
+            if always_on_top {
+                ex_style |= WS_EX_TOPMOST.0 as i32;
+            } else {
+                ex_style &= !(WS_EX_TOPMOST.0 as i32);
+            }
             if focusable {
                 ex_style &= !(WS_EX_NOACTIVATE.0 as i32);
             } else {
@@ -565,16 +610,14 @@ mod imp {
                 flags |= SWP_NOACTIVATE;
             }
 
-            SetWindowPos(
-                hwnd,
-                HWND_TOPMOST,
-                mon_x,
-                mon_y,
-                mon_w as i32,
-                phys_height,
-                flags,
-            )
-            .map_err(|e| format!("SetWindowPos(set_overlay_bounds) failed: {e}"))?;
+            let z_order = if always_on_top {
+                HWND_TOPMOST
+            } else {
+                HWND_NOTOPMOST
+            };
+
+            SetWindowPos(hwnd, z_order, win_x, mon_y, win_w, phys_height, flags)
+                .map_err(|e| format!("SetWindowPos(set_overlay_bounds) failed: {e}"))?;
         }
 
         if focusable {
@@ -615,15 +658,142 @@ mod imp {
         Ok(())
     }
 
+    pub fn get_media_session() -> MediaSessionInfo {
+        let empty = MediaSessionInfo {
+            has_session: false,
+            title: String::new(),
+            artist: String::new(),
+            album: String::new(),
+            source_app: String::new(),
+            is_playing: false,
+        };
+
+        let Ok(op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() else {
+            return empty;
+        };
+        let Ok(manager) = op.get() else {
+            return empty;
+        };
+        let Ok(session) = manager.GetCurrentSession() else {
+            return empty;
+        };
+
+        let is_playing = session
+            .GetPlaybackInfo()
+            .and_then(|info| info.PlaybackStatus())
+            .map(|st| st == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing)
+            .unwrap_or(false);
+
+        let source_app = session
+            .SourceAppUserModelId()
+            .map(|s| {
+                let raw = s.to_string();
+                raw.split('!').next().unwrap_or(&raw).replace(".exe", "")
+            })
+            .unwrap_or_default();
+
+        let (title, artist, album) = session
+            .TryGetMediaPropertiesAsync()
+            .ok()
+            .and_then(|p| p.get().ok())
+            .map(|props| {
+                (
+                    props.Title().map(|s| s.to_string()).unwrap_or_default(),
+                    props.Artist().map(|s| s.to_string()).unwrap_or_default(),
+                    props.AlbumTitle().map(|s| s.to_string()).unwrap_or_default(),
+                )
+            })
+            .unwrap_or_default();
+
+        if title.is_empty() && artist.is_empty() {
+            return empty;
+        }
+
+        MediaSessionInfo {
+            has_session: true,
+            title,
+            artist,
+            album,
+            source_app,
+            is_playing,
+        }
+    }
+
+    fn send_media_vk(vk: u8) {
+        unsafe {
+            keybd_event(vk, 0, Default::default(), 0);
+            keybd_event(vk, 0, KEYEVENTF_KEYUP, 0);
+        }
+    }
+
+    pub fn media_control(action: &str) -> Result<MediaSessionInfo, String> {
+        let handled = (|| -> Option<bool> {
+            let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
+                .ok()?
+                .get()
+                .ok()?;
+            let session = manager.GetCurrentSession().ok()?;
+            let ok = match action {
+                "play_pause" => session.TryTogglePlayPauseAsync().ok()?.get().ok()?,
+                "next" => session.TrySkipNextAsync().ok()?.get().ok()?,
+                "previous" => session.TrySkipPreviousAsync().ok()?.get().ok()?,
+                _ => return Some(false),
+            };
+            Some(ok)
+        })()
+        .unwrap_or(false);
+
+        if !handled {
+            match action {
+                "play_pause" => send_media_vk(VK_MEDIA_PLAY_PAUSE.0 as u8),
+                "next" => send_media_vk(VK_MEDIA_NEXT_TRACK.0 as u8),
+                "previous" => send_media_vk(VK_MEDIA_PREV_TRACK.0 as u8),
+                _ => return Err(format!("Unknown media action: {action}")),
+            }
+        }
+
+        Ok(get_media_session())
+    }
+
+    pub fn start_native_file_drag(window: &WebviewWindow, paths: Vec<String>) -> Result<(), String> {
+        let valid_paths: Vec<std::path::PathBuf> = paths
+            .into_iter()
+            .map(std::path::PathBuf::from)
+            .filter(|p| p.exists())
+            .collect();
+        if valid_paths.is_empty() {
+            return Err("No existing files to drag".to_string());
+        }
+        let icon = drag::Image::Raw(include_bytes!("../icons/32x32.png").to_vec());
+        drag::start_drag(
+            window,
+            drag::DragItem::Files(valid_paths),
+            icon,
+            |_, _| {},
+            drag::Options::default(),
+        )
+        .map_err(|e| format!("Native drag-out failed: {e:?}"))
+    }
+
+    pub fn trim_working_set() {
+        unsafe {
+            let _ = SetProcessWorkingSetSize(GetCurrentProcess(), usize::MAX, usize::MAX);
+        }
+    }
+
     pub fn open_windows_settings(uri: &str) -> Result<(), String> {
         const ALLOWED: &[&str] = &[
             "ms-settings:",
+            "ms-settings:network",
             "ms-settings:network-wifi",
+            "ms-settings:network-airplanemode",
             "ms-settings:bluetooth",
             "ms-settings:sound",
             "ms-settings:batterysaver",
             "ms-settings:regionlanguage",
             "ms-settings:display",
+            "ms-settings:notifications",
+            "ms-settings:quiethours",
         ];
         if !ALLOWED.contains(&uri) {
             return Err(format!("Unsupported Windows Settings URI: {uri}"));
@@ -664,6 +834,7 @@ mod imp {
             volume: 0.5,
             volume_percent: 50,
             muted: false,
+            output_device: "Default Output".to_string(),
         }
     }
 
@@ -673,6 +844,7 @@ mod imp {
             volume: clamped,
             volume_percent: (clamped * 100.0).round() as u8,
             muted: false,
+            output_device: "Default Output".to_string(),
         })
     }
 
@@ -681,6 +853,7 @@ mod imp {
             volume: 0.5,
             volume_percent: 50,
             muted: true,
+            output_device: "Default Output".to_string(),
         })
     }
 
@@ -727,20 +900,31 @@ mod imp {
         logical_height: u32,
         focusable: bool,
         monitor_index: Option<usize>,
+        floating_width: Option<u32>,
+        horizontal_offset: i32,
+        _always_on_top: bool,
     ) -> Result<(), String> {
         let monitors = enumerate_monitors(window);
         let target = monitor_index
             .and_then(|idx| monitors.get(idx))
             .or_else(|| monitors.first());
 
-        let (x, y, w, scale) = match target {
+        let (mon_x, mon_y, mon_w, scale) = match target {
             Some(m) => (m.x, m.y, m.width, m.scale_factor),
             None => (0, 0, 1920, 1.0),
         };
 
-        let phys_h = ((logical_height.clamp(28, 800) as f64) * scale).round() as u32;
+        let phys_h = ((logical_height.clamp(28, 860) as f64) * scale).round() as u32;
+        let (x, w) = match floating_width {
+            Some(fw) => {
+                let phys_w = ((fw.clamp(280, 1200) as f64) * scale).round() as u32;
+                let centered = mon_x + ((mon_w as i32 - phys_w as i32) / 2) + horizontal_offset;
+                (centered.max(mon_x), phys_w.min(mon_w))
+            }
+            None => (mon_x, mon_w),
+        };
         window
-            .set_position(PhysicalPosition::new(x, y))
+            .set_position(PhysicalPosition::new(x, mon_y))
             .map_err(|e| e.to_string())?;
         window
             .set_size(PhysicalSize::new(w, phys_h))
@@ -759,6 +943,30 @@ mod imp {
         Err("reveal_in_explorer is only supported on Windows".to_string())
     }
 
+    pub fn get_media_session() -> MediaSessionInfo {
+        MediaSessionInfo {
+            has_session: false,
+            title: String::new(),
+            artist: String::new(),
+            album: String::new(),
+            source_app: String::new(),
+            is_playing: false,
+        }
+    }
+
+    pub fn media_control(_action: &str) -> Result<MediaSessionInfo, String> {
+        Ok(get_media_session())
+    }
+
+    pub fn start_native_file_drag(
+        _window: &WebviewWindow,
+        _paths: Vec<String>,
+    ) -> Result<(), String> {
+        Err("Native file drag-out is supported on Windows".to_string())
+    }
+
+    pub fn trim_working_set() {}
+
     pub fn open_windows_settings(_uri: &str) -> Result<(), String> {
         Err("open_windows_settings is only supported on Windows".to_string())
     }
@@ -774,5 +982,6 @@ pub fn get_system_snapshot() -> SystemSnapshot {
         audio: get_audio_status(),
         network: get_network_status(),
         is_fullscreen_active: is_fullscreen_app_active(),
+        media: get_media_session(),
     }
 }

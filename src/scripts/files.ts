@@ -246,6 +246,37 @@ function updateFilesBody(
     });
   });
 
+  // Native Windows OLE drag-out: grab any file chip and drag directly to Explorer/Desktop/apps
+  gridSlot.querySelectorAll<HTMLElement>(".file-chip").forEach((chip) => {
+    chip.addEventListener("pointerdown", (startEvt) => {
+      if (startEvt.button !== 0) return;
+      if ((startEvt.target as HTMLElement).closest("button")) return;
+      const id = chip.dataset.fileId;
+      const found = state.heldFiles.find((f) => f.id === id);
+      if (!found || !found.available) return;
+      const targetPath = found.vaultPath || found.originalPath;
+      const sx = startEvt.clientX;
+      const sy = startEvt.clientY;
+
+      const onMove = (moveEvt: PointerEvent) => {
+        if (Math.hypot(moveEvt.clientX - sx, moveEvt.clientY - sy) >= 7) {
+          cleanup();
+          void callCommand("start_native_file_drag", { paths: [targetPath] }).catch((err) => {
+            showToast(`Drag-out unavailable: ${String(err)}`);
+          });
+        }
+      };
+      const cleanup = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", cleanup);
+        window.removeEventListener("pointercancel", cleanup);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", cleanup, { once: true });
+      window.addEventListener("pointercancel", cleanup, { once: true });
+    });
+  });
+
   gridSlot.querySelectorAll<HTMLElement>("[data-remove-id]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const id = btn.dataset.removeId;

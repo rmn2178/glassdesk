@@ -1,103 +1,156 @@
 /* ============================================================================
-   GLASSDESK — Optical Liquid Glass Material Surfaces (Windows 11 WebView2)
+   GLASSDESK — 3-Tier Optical Liquid Glass Material System (Windows 11)
+   Tier 1 (Primary):   Dynamic Island capsule & hero dock
+   Tier 2 (Secondary): Floating panels (Control Center, Settings, Tasks, Files)
+   Tier 3 (Tertiary):  Nested glass cards, buttons, switches, chips & inputs
    ============================================================================ */
 
+/* Top Bar Surface (used when island_style = "bar") */
 .glass-bar {
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.065) 0%,
-    rgba(255, 255, 255, 0.01) 42%,
+    rgba(255, 255, 255, 0.085) 0%,
+    rgba(255, 255, 255, 0.015) 45%,
     transparent 100%
   ), var(--bar-bg);
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(190%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.8)) saturate(190%);
   border-bottom: 1px solid var(--bar-border);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.09),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.16),
-    0 2px 12px rgba(0, 0, 0, 0.18);
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+    0 2px 14px var(--panel-shadow-b);
   transition: background-color 180ms var(--ease-out), border-color 180ms var(--ease-out);
 }
 
 :root[data-theme="light"] .glass-bar {
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.72) 0%,
-    rgba(255, 255, 255, 0.25) 100%
+    rgba(255, 255, 255, 0.78) 0%,
+    rgba(255, 255, 255, 0.28) 100%
   ), var(--bar-bg);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 1px 10px rgba(15, 23, 42, 0.08);
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 2px 12px var(--panel-shadow-b);
 }
 
+/* Tier 1 — Primary Glass (Dynamic Island Capsule, Mode Dock, Toast) */
+.glass-primary,
 .glass-capsule {
   position: relative;
   overflow: hidden;
   background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.09) 0%,
-    rgba(255, 255, 255, 0.02) 48%,
-    rgba(0, 0, 0, 0.08) 100%
+    165deg,
+    rgba(255, 255, 255, 0.26) 0%,
+    rgba(255, 255, 255, 0.07) 38%,
+    rgba(175, 225, 255, 0.05) 72%,
+    rgba(255, 255, 255, 0.14) 100%
   ), var(--capsule-bg);
-  backdrop-filter: blur(32px) saturate(200%);
-  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(220%) brightness(1.08);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(220%) brightness(1.08);
   border: 1px solid var(--capsule-border);
   box-shadow:
-    inset 0 1px 0 var(--capsule-highlight),
-    inset 0 0 0 0.5px rgba(255, 255, 255, 0.07),
-    0 3px 12px rgba(0, 0, 0, 0.28);
+    inset 0 1.5px 1px var(--capsule-highlight),
+    inset 0 -1px 1px rgba(190, 232, 255, 0.22),
+    inset 0 0 14px rgba(255, 255, 255, 0.07),
+    0 10px 30px var(--panel-shadow-a),
+    0 2px 8px var(--panel-shadow-b);
+}
+
+:root[data-theme="light"] .glass-primary,
+:root[data-theme="light"] .glass-capsule {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.88) 0%,
+    rgba(255, 255, 255, 0.45) 55%,
+    rgba(241, 245, 249, 0.32) 100%
+  ), var(--capsule-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.06),
+    0 8px 24px var(--panel-shadow-a),
+    0 2px 8px var(--panel-shadow-b);
 }
 
 .glass-capsule::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    108deg,
-    transparent 24%,
-    rgba(255, 255, 255, 0.16) 50%,
+  background: radial-gradient(
+    110px circle at var(--gx, 50%) var(--gy, 50%),
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(255, 255, 255, 0.07) 48%,
     transparent 76%
   );
-  transform: translateX(-125%);
-  transition: transform 420ms var(--ease-spring);
+  opacity: var(--g-op, 0);
+  transition: opacity 180ms var(--ease-out);
   pointer-events: none;
 }
 
-.glass-capsule:hover::before {
-  transform: translateX(125%);
-}
-
+/* Tier 2 — Secondary Glass (Control Center, Settings, Tasks, Files, Calendar, Notifications) */
 .glass-panel {
   background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.075) 0%,
-    rgba(255, 255, 255, 0.015) 26%,
-    transparent 100%
+    155deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.06) 32%,
+    rgba(170, 224, 255, 0.045) 68%,
+    rgba(255, 255, 255, 0.12) 100%
   ), var(--panel-bg);
-  backdrop-filter: blur(38px) saturate(200%);
-  -webkit-backdrop-filter: blur(38px) saturate(200%);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.05)) saturate(225%) brightness(1.07);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.05)) saturate(225%) brightness(1.07);
   border: 1px solid var(--panel-border);
   box-shadow:
-    inset 0 1px 0 var(--panel-specular),
-    inset 0 0 0 0.5px rgba(255, 255, 255, 0.06),
-    var(--panel-shadow);
-  border-radius: 16px;
+    inset 0 1.5px 1px var(--panel-specular),
+    inset 0 -1px 1px rgba(190, 232, 255, 0.20),
+    inset 0 0 22px rgba(255, 255, 255, 0.06),
+    0 24px 56px var(--panel-shadow-a),
+    0 6px 18px var(--panel-shadow-b);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.30);
+  border-radius: var(--glass-radius);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    280px circle at var(--px, 50%) var(--py, 0%),
+    rgba(255, 255, 255, 0.085) 0%,
+    transparent 65%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glass-panel > * {
+  position: relative;
+  z-index: 1;
 }
 
 :root[data-theme="light"] .glass-panel {
   background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.78) 0%,
-    rgba(255, 255, 255, 0.42) 32%,
-    rgba(248, 250, 252, 0.3) 100%
+    165deg,
+    rgba(255, 255, 255, 0.84) 0%,
+    rgba(255, 255, 255, 0.48) 34%,
+    rgba(241, 245, 249, 0.36) 100%
   ), var(--panel-bg);
 }
 
+/* Tier 3 — Tertiary Glass (Cards, Controls, Buttons, Inputs) */
 .glass-card {
-  background: var(--panel-surface);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.01) 100%
+  ), var(--panel-surface);
   border: 1px solid var(--panel-border);
-  border-radius: 11px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  border-radius: var(--glass-card-radius);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.10);
   transition:
     background-color var(--dur-hover) var(--ease-out),
     border-color var(--dur-hover) var(--ease-out),
@@ -109,8 +162,8 @@
   background: var(--panel-surface-hover);
   border-color: var(--accent-ring);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 4px 14px rgba(0, 0, 0, 0.14);
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 5px 16px rgba(0, 0, 0, 0.16);
 }
 
 .gd-btn {
@@ -118,14 +171,14 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
-  padding: 5px 10px;
-  border-radius: 8px;
+  padding: 5px 11px;
+  border-radius: 9px;
   font-size: 11.5px;
   font-weight: 500;
   background: var(--panel-surface);
   border: 1px solid var(--panel-border);
   color: var(--text-primary);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09);
   transition:
     background-color var(--dur-hover) var(--ease-out),
     border-color var(--dur-hover) var(--ease-out),
@@ -138,7 +191,12 @@
 }
 
 .gd-btn:active {
-  transform: scale(0.965);
+  transform: scale(0.96);
+}
+
+.gd-btn:disabled {
+  opacity: 0.42;
+  pointer-events: none;
 }
 
 .gd-btn-primary {
@@ -146,7 +204,7 @@
   color: var(--accent-ink);
   border-color: transparent;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.24);
 }
 
 .gd-btn-primary:hover {
@@ -157,19 +215,19 @@
 
 .gd-btn-danger {
   color: var(--danger);
-  border-color: rgba(248, 113, 113, 0.28);
+  border-color: rgba(248, 113, 113, 0.30);
 }
 
 .gd-btn-danger:hover {
   background: rgba(248, 113, 113, 0.14);
-  border-color: rgba(248, 113, 113, 0.48);
+  border-color: rgba(248, 113, 113, 0.50);
 }
 
 .gd-input,
 .gd-select {
   background: var(--input-bg);
   border: 1px solid var(--input-border);
-  border-radius: 8px;
+  border-radius: 9px;
   padding: 6px 9px;
   font-size: 12px;
   color: var(--text-primary);
@@ -195,6 +253,38 @@
 :root[data-theme="light"] .gd-select option {
   background: #ffffff;
   color: #111318;
+}
+
+/* Fallback when backdrop-filter is unavailable or Low-GPU mode is enabled */
+:root[data-low-gpu="true"] .glass-bar,
+:root[data-low-gpu="true"] .glass-primary,
+:root[data-low-gpu="true"] .glass-capsule,
+:root[data-low-gpu="true"] .glass-panel {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+:root[data-theme="dark"][data-low-gpu="true"] .glass-panel,
+:root[data-theme="dark"][data-low-gpu="true"] .glass-capsule {
+  background: rgba(18, 20, 27, 0.96);
+}
+
+:root[data-theme="light"][data-low-gpu="true"] .glass-panel,
+:root[data-theme="light"][data-low-gpu="true"] .glass-capsule {
+  background: rgba(247, 249, 252, 0.97);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-theme="dark"] .glass-panel,
+  :root[data-theme="dark"] .glass-capsule,
+  :root[data-theme="dark"] .glass-bar {
+    background: rgba(18, 20, 27, 0.95);
+  }
+  :root[data-theme="light"] .glass-panel,
+  :root[data-theme="light"] .glass-capsule,
+  :root[data-theme="light"] .glass-bar {
+    background: rgba(248, 250, 253, 0.96);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

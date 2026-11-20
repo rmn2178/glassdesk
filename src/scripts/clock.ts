@@ -10,7 +10,7 @@ function defaultLocalReminderTime(offsetMinutes = 30): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function formatClockStrings(now: Date, use24h: boolean): {
+export function formatClockStrings(now: Date, use24h: boolean, showSeconds = false): {
   shortTime: string;
   fullTime: string;
   shortDate: string;
@@ -19,6 +19,7 @@ export function formatClockStrings(now: Date, use24h: boolean): {
   const shortTime = now.toLocaleTimeString(undefined, {
     hour: "2-digit",
     minute: "2-digit",
+    ...(showSeconds ? { second: "2-digit" } : {}),
     hour12: !use24h,
   });
   const fullTime = now.toLocaleTimeString(undefined, {
@@ -42,17 +43,39 @@ export function formatClockStrings(now: Date, use24h: boolean): {
 }
 
 /**
- * Updates ONLY the clock text nodes — never re-renders the interface every second.
+ * Adaptive ultra-low-CPU clock:
+ * - Ticks once per minute (aligned to minute boundary) when idle & seconds are hidden.
+ * - Ticks once per second only when seconds are enabled or the Calendar hero clock is open.
+ * - Suspends automatically while the overlay window is hidden.
  */
 export function startLightweightClock(state: AppState): void {
   const islandTime = document.getElementById("island-clock-time");
   const topbarTime = document.getElementById("topbar-time");
   const topbarDate = document.getElementById("topbar-date");
+  let timerId: number | null = null;
+
+  const scheduleNext = () => {
+    if (timerId !== null) {
+      window.clearTimeout(timerId);
+      timerId = null;
+    }
+    if (document.hidden) return;
+
+    const showSecs = state.settings["clock_show_seconds"] === "true";
+    const needsSecondTick = showSecs || state.activePanel === "calendar";
+    const now = Date.now();
+    const delayMs = needsSecondTick
+      ? 1000 - (now % 1000) + 16
+      : 60_000 - (now % 60_000) + 50;
+
+    timerId = window.setTimeout(tick, delayMs);
+  };
 
   const tick = () => {
     const use24h = state.settings["clock_format"] === "24h";
+    const showSecs = state.settings["clock_show_seconds"] === "true";
     const now = new Date();
-    const { shortTime, fullTime, shortDate } = formatClockStrings(now, use24h);
+    const { shortTime, fullTime, shortDate } = formatClockStrings(now, use24h, showSecs);
 
     if (islandTime && islandTime.textContent !== shortTime) {
       islandTime.textContent = shortTime;
@@ -65,18 +88,30 @@ export function startLightweightClock(state: AppState): void {
     }
 
     const calHero = document.getElementById("cal-live-clock");
-    if (calHero) {
+    if (calHero && calHero.textContent !== fullTime) {
       calHero.textContent = fullTime;
     }
+
+    scheduleNext();
   };
 
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      tick();
+    } else if (timerId !== null) {
+      window.clearTimeout(timerId);
+      timerId = null;
+    }
+  });
+
+  window.addEventListener("glassdesk:clock-sync", () => tick());
   tick();
-  window.setInterval(tick, 1000);
 }
 
 export function renderCalendarPanel(
   state: AppState,
-  onRemindersMutated?: () => Promise<void>
+  onRemindersMutated?: () => Promise<void>,
+  onClose?: () => void
 ): void {
   const el = document.getElementById("panel-calendar");
   if (!el) return;
@@ -127,9 +162,13 @@ export function renderCalendarPanel(
   const activeReminders = state.reminders.filter((r) => !r.dismissed).slice(0, 4);
 
   el.innerHTML = `
-    <div class="panel-header">
+    <div class="panel-header gd-drag-handle" title="Drag to move panel · Double-click to recenter">
       <div class="panel-title-group">
-        <span class="panel-title">Clock & Calendar</span>
+        <div class="mac-lights">
+          <button class="mac-dot mac-close" data-mac-close type="button" aria-label="Close panel"></button>
+          <button class="mac-dot mac-reset" data-mac-reset type="button" aria-label="Recenter panel"></button>
+        </div>
+        <span class="panel-title">Time & Calendar</span>
       </div>
       <div class="panel-actions">
         <button class="gd-btn" id="cal-today-btn" type="button">Today</button>
@@ -159,7 +198,7 @@ export function renderCalendarPanel(
     </div>
 
     <div class="cal-reminders-box">
-      <span class="hub-card-label">Quick Reminders</span>
+      <span class="hub-card-label">Upcoming Reminders</span>
       <form id="cal-reminder-form" class="cal-reminder-form">
         <input id="cal-rem-title" class="gd-input" style="padding: 4px 8px; font-size: 11px;" type="text" placeholder="Add reminder..." required />
         <input id="cal-rem-time" class="gd-input" style="padding: 4px 6px; font-size: 10.5px; width: 132px;" type="datetime-local" value="${defaultLocalReminderTime(30)}" required />
@@ -185,13 +224,20 @@ export function renderCalendarPanel(
     </div>
   `;
 
+  window.dispatchEvent(new Event("glassdesk:clock-sync"));
+
+  el.querySelector("[data-mac-close]")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    onClose?.();
+  });
+
   el.querySelector("#cal-prev-btn")?.addEventListener("click", () => {
     viewedMonth -= 1;
     if (viewedMonth < 0) {
       viewedMonth = 11;
       viewedYear -= 1;
     }
-    renderCalendarPanel(state, onRemindersMutated);
+    renderCalendarPanel(state, onRemindersMutated, onClose);
   });
 
   el.querySelector("#cal-next-btn")?.addEventListener("click", () => {
@@ -200,14 +246,14 @@ export function renderCalendarPanel(
       viewedMonth = 0;
       viewedYear += 1;
     }
-    renderCalendarPanel(state, onRemindersMutated);
+    renderCalendarPanel(state, onRemindersMutated, onClose);
   });
 
   el.querySelector("#cal-today-btn")?.addEventListener("click", () => {
     const t = new Date();
     viewedYear = t.getFullYear();
     viewedMonth = t.getMonth();
-    renderCalendarPanel(state, onRemindersMutated);
+    renderCalendarPanel(state, onRemindersMutated, onClose);
   });
 
   el.querySelector<HTMLFormElement>("#cal-reminder-form")?.addEventListener("submit", async (e) => {

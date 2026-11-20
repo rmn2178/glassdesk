@@ -1,8 +1,9 @@
+use crate::database::{self, DbState, StorageOptimizationReport};
 use crate::win_api::{
-    self, ActiveWindowInfo, AudioStatus, BatteryStatus, MonitorDescriptor, NetworkStatus,
-    SystemSnapshot,
+    self, ActiveWindowInfo, AudioStatus, BatteryStatus, MediaSessionInfo, MonitorDescriptor,
+    NetworkStatus, SystemSnapshot,
 };
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
 pub fn get_system_snapshot() -> SystemSnapshot {
@@ -63,11 +64,22 @@ pub fn set_overlay_bounds(
     height: u32,
     focusable: bool,
     monitor_index: Option<usize>,
+    floating_width: Option<u32>,
+    horizontal_offset: Option<i32>,
+    always_on_top: Option<bool>,
 ) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
         .ok_or_else(|| "Main overlay window not found".to_string())?;
-    win_api::set_overlay_bounds(&window, height, focusable, monitor_index)
+    win_api::set_overlay_bounds(
+        &window,
+        height,
+        focusable,
+        monitor_index,
+        floating_width,
+        horizontal_offset.unwrap_or(0),
+        always_on_top.unwrap_or(true),
+    )
 }
 
 #[tauri::command]
@@ -87,4 +99,26 @@ pub fn set_overlay_visible(app: AppHandle, visible: bool) -> Result<(), String> 
 #[tauri::command]
 pub fn open_windows_settings(uri: String) -> Result<(), String> {
     win_api::open_windows_settings(&uri)
+}
+
+#[tauri::command]
+pub fn trim_memory() {
+    win_api::trim_working_set();
+}
+
+#[tauri::command]
+pub fn optimize_storage(state: State<'_, DbState>) -> Result<StorageOptimizationReport, String> {
+    let report = database::optimize_storage(&state)?;
+    win_api::trim_working_set();
+    Ok(report)
+}
+
+#[tauri::command]
+pub fn get_media_session() -> MediaSessionInfo {
+    win_api::get_media_session()
+}
+
+#[tauri::command]
+pub fn media_control(action: String) -> Result<MediaSessionInfo, String> {
+    win_api::media_control(&action)
 }

@@ -6,6 +6,38 @@ use tauri::{AppHandle, State};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
+const ACTION_SHORTCUT_KEYS: &[&str] = &[
+    "shortcut_controls",
+    "shortcut_tasks",
+    "shortcut_files",
+    "shortcut_settings",
+];
+
+fn sync_registered_shortcuts(app: &AppHandle, state: &DbState) -> Result<(), String> {
+    let settings = database::get_all_settings(state)?;
+    let _ = app.global_shortcut().unregister_all();
+
+    let main_sc = settings
+        .get("global_shortcut")
+        .cloned()
+        .unwrap_or_else(|| "Alt+Space".to_string());
+    if !main_sc.trim().is_empty() {
+        app.global_shortcut()
+            .register(main_sc.as_str())
+            .map_err(|e| format!("Failed to register shortcut '{main_sc}': {e}"))?;
+    }
+
+    for key in ACTION_SHORTCUT_KEYS {
+        if let Some(sc) = settings.get(*key) {
+            let trimmed = sc.trim();
+            if !trimmed.is_empty() && trimmed != main_sc {
+                let _ = app.global_shortcut().register(trimmed);
+            }
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_all_settings(state: State<'_, DbState>) -> Result<HashMap<String, String>, String> {
     database::get_all_settings(&state)
@@ -33,11 +65,26 @@ pub fn update_global_shortcut(
     if trimmed.is_empty() {
         return Err("Shortcut cannot be empty".to_string());
     }
-    let _ = app.global_shortcut().unregister_all();
-    app.global_shortcut()
-        .register(trimmed)
-        .map_err(|e| format!("Failed to register shortcut '{trimmed}': {e}"))?;
-    database::set_setting(&state, "global_shortcut", trimmed)
+    database::set_setting(&state, "global_shortcut", trimmed)?;
+    sync_registered_shortcuts(&app, &state)
+}
+
+#[tauri::command]
+pub fn update_action_shortcut(
+    app: AppHandle,
+    state: State<'_, DbState>,
+    action_key: String,
+    shortcut: String,
+) -> Result<(), String> {
+    if !ACTION_SHORTCUT_KEYS.contains(&action_key.as_str()) {
+        return Err(format!("Unsupported shortcut action: {action_key}"));
+    }
+    let trimmed = shortcut.trim();
+    if trimmed.is_empty() {
+        return Err("Shortcut cannot be empty".to_string());
+    }
+    database::set_setting(&state, &action_key, trimmed)?;
+    sync_registered_shortcuts(&app, &state)
 }
 
 #[tauri::command]

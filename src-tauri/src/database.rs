@@ -2,7 +2,7 @@ use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
 use chrono::Utc;
 use image::imageops::FilterType;
-use image::ImageFormat;
+use image::codecs::jpeg::JpegEncoder;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -72,6 +72,18 @@ pub struct ReminderItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct NotificationItem {
+    pub id: String,
+    pub title: String,
+    pub message: String,
+    pub category: String,
+    pub read: bool,
+    pub created_at: String,
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct QuickFolder {
     pub id: String,
     pub name: String,
@@ -97,14 +109,42 @@ pub struct FavouriteApp {
 pub const DEFAULT_SETTINGS: &[(&str, &str)] = &[
     ("enabled", "true"),
     ("auto_hide_fullscreen", "true"),
+    ("auto_hide_idle", "true"),
     ("theme", "dark"),
     ("clock_format", "12h"),
+    ("clock_show_seconds", "false"),
     ("accent_color", "silver"),
+    ("glass_transparency", "24"),
+    ("blur_intensity", "22"),
+    ("corner_roundness", "22"),
+    ("shadow_intensity", "100"),
+    ("animation_intensity", "normal"),
+    ("reduce_motion", "false"),
+    ("low_gpu_fallback", "false"),
+    ("island_style", "bar"),
+    ("island_width", "340"),
+    ("island_height", "32"),
+    ("island_top_offset", "8"),
+    ("island_horizontal_offset", "0"),
+    ("default_expanded_mode", "hub"),
+    ("hover_expand", "false"),
+    ("click_expand", "true"),
+    ("always_on_top", "true"),
     ("collapsed_height", "36"),
     ("monitor_index", "0"),
     ("global_shortcut", "Alt+Space"),
+    ("shortcut_controls", "Alt+C"),
+    ("shortcut_tasks", "Alt+T"),
+    ("shortcut_files", "Alt+F"),
+    ("shortcut_settings", "Alt+,"),
     ("vault_copy_by_default", "false"),
     ("auto_collapse_after_drop", "true"),
+    ("control_center_modules", "status,connectivity,display,audio,focus,apps"),
+    ("notifications_enabled", "true"),
+    ("dnd_enabled", "false"),
+    ("default_task_view", "today"),
+    ("show_completed_tasks", "true"),
+    ("poll_interval_ms", "5000"),
 ];
 
 impl DbState {
@@ -126,6 +166,16 @@ impl DbState {
             .map_err(|e| format!("Failed to set synchronous mode: {e}"))?;
         conn.pragma_update(None, "foreign_keys", "ON")
             .map_err(|e| format!("Failed to enable foreign_keys: {e}"))?;
+        conn.pragma_update(None, "cache_size", -1024)
+            .map_err(|e| format!("Failed to cap cache_size: {e}"))?;
+        conn.pragma_update(None, "temp_store", "MEMORY")
+            .map_err(|e| format!("Failed to set temp_store: {e}"))?;
+        conn.pragma_update(None, "mmap_size", 0)
+            .map_err(|e| format!("Failed to disable mmap_size: {e}"))?;
+        conn.pragma_update(None, "auto_vacuum", "INCREMENTAL")
+            .map_err(|e| format!("Failed to set auto_vacuum: {e}"))?;
+        conn.pragma_update(None, "wal_autocheckpoint", 200)
+            .map_err(|e| format!("Failed to set wal_autocheckpoint: {e}"))?;
         conn.busy_timeout(Duration::from_secs(5))
             .map_err(|e| format!("Failed to set busy_timeout: {e}"))?;
 
@@ -216,7 +266,17 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
 
         CREATE INDEX IF NOT EXISTS idx_held_files_pinned ON held_files(pinned DESC, created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed, priority DESC, created_at DESC);
+        CREATE TABLE IF NOT EXISTS notifications (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            message TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT 'system',
+            read INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(dismissed, remind_at ASC);
+        CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(read ASC, created_at DESC);
         "#,
     )
     .map_err(|e| format!("Failed to run database migrations: {e}"))?;
@@ -313,13 +373,14 @@ pub fn generate_image_thumbnail(path: &Path) -> Option<String> {
     }
 
     let img = image::open(path).ok()?;
-    let thumb = img.resize_to_fill(64, 64, FilterType::Lanczos3);
+    let thumb = img.resize_to_fill(48, 48, FilterType::Triangle).to_rgb8();
 
     let mut buffer = Cursor::new(Vec::new());
-    thumb.write_to(&mut buffer, ImageFormat::Png).ok()?;
+    let mut encoder = JpegEncoder::new_with_quality(&mut buffer, 72);
+    encoder.encode_image(&thumb).ok()?;
 
     let encoded = BASE64_STANDARD.encode(buffer.into_inner());
-    Some(format!("data:image/png;base64,{encoded}"))
+    Some(format!("data:image/jpeg;base64,{encoded}"))
 }
 
 // ============================================================================
@@ -439,7 +500,7 @@ pub fn add_held_file(
 pub fn list_held_files(state: &DbState) -> Result<Vec<HeldFile>, String> {
     let conn = state.lock_conn()?;
     let mut stmt = conn
-        .prepare(
+        .prepare_cached(
             r#"
             SELECT id, original_path, vault_path, display_name, extension, category,
                    is_dir, size_bytes, is_vault_copy, thumbnail_b64, pinned, created_at
@@ -556,7 +617,7 @@ pub fn remove_held_file(state: &DbState, id: &str) -> Result<(), String> {
 pub fn clear_held_files(state: &DbState) -> Result<usize, String> {
     let conn = state.lock_conn()?;
     let mut stmt = conn
-        .prepare("SELECT vault_path FROM held_files WHERE vault_path IS NOT NULL")
+        .prepare_cached("SELECT vault_path FROM held_files WHERE vault_path IS NOT NULL")
         .map_err(|e| format!("Failed to query vault paths: {e}"))?;
     let vault_paths: Vec<String> = stmt
         .query_map([], |row| row.get(0))
@@ -576,6 +637,7 @@ pub fn clear_held_files(state: &DbState) -> Result<usize, String> {
         }
     }
 
+    let _ = conn.execute_batch("PRAGMA incremental_vacuum; PRAGMA wal_checkpoint(TRUNCATE); PRAGMA shrink_memory;");
     Ok(deleted)
 }
 
@@ -640,7 +702,7 @@ pub fn create_task(
 pub fn list_tasks(state: &DbState) -> Result<Vec<TaskItem>, String> {
     let conn = state.lock_conn()?;
     let mut stmt = conn
-        .prepare(
+        .prepare_cached(
             r#"
             SELECT id, title, notes, category, completed, priority, due_at, reminder_at, created_at, updated_at
             FROM tasks
@@ -796,7 +858,7 @@ pub fn create_reminder(
 pub fn list_reminders(state: &DbState) -> Result<Vec<ReminderItem>, String> {
     let conn = state.lock_conn()?;
     let mut stmt = conn
-        .prepare(
+        .prepare_cached(
             r#"
             SELECT id, title, remind_at, dismissed, repeat_rule, created_at
             FROM reminders
@@ -837,6 +899,107 @@ pub fn delete_reminder(state: &DbState, id: &str) -> Result<(), String> {
     conn.execute("DELETE FROM reminders WHERE id = ?1", params![id])
         .map_err(|e| format!("Failed to delete reminder: {e}"))?;
     Ok(())
+}
+
+// ============================================================================
+// Notifications CRUD
+// ============================================================================
+
+pub fn push_notification(
+    state: &DbState,
+    title: &str,
+    message: &str,
+    category: &str,
+) -> Result<NotificationItem, String> {
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now().to_rfc3339();
+    let clean_title = title.trim();
+    let clean_msg = message.trim();
+    let clean_cat = if category.trim().is_empty() {
+        "system"
+    } else {
+        category.trim()
+    };
+    let conn = state.lock_conn()?;
+
+    conn.execute(
+        r#"
+        INSERT INTO notifications (id, title, message, category, read, created_at)
+        VALUES (?1, ?2, ?3, ?4, 0, ?5)
+        "#,
+        params![id, clean_title, clean_msg, clean_cat, now],
+    )
+    .map_err(|e| format!("Failed to create notification: {e}"))?;
+
+    // Keep history bounded to latest 50 notifications
+    let _ = conn.execute(
+        r#"
+        DELETE FROM notifications
+        WHERE id NOT IN (
+            SELECT id FROM notifications ORDER BY created_at DESC LIMIT 50
+        )
+        "#,
+        [],
+    );
+
+    Ok(NotificationItem {
+        id,
+        title: clean_title.to_string(),
+        message: clean_msg.to_string(),
+        category: clean_cat.to_string(),
+        read: false,
+        created_at: now,
+    })
+}
+
+pub fn list_notifications(state: &DbState) -> Result<Vec<NotificationItem>, String> {
+    let conn = state.lock_conn()?;
+    let mut stmt = conn
+        .prepare_cached(
+            r#"
+            SELECT id, title, message, category, read, created_at
+            FROM notifications
+            ORDER BY created_at DESC
+            LIMIT 50
+            "#,
+        )
+        .map_err(|e| format!("Failed to prepare notifications query: {e}"))?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(NotificationItem {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                message: row.get(2)?,
+                category: row.get(3)?,
+                read: row.get::<_, i32>(4)? != 0,
+                created_at: row.get(5)?,
+            })
+        })
+        .map_err(|e| format!("Failed to query notifications: {e}"))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to collect notifications: {e}"))
+}
+
+pub fn mark_notification_read(state: &DbState, id: &str) -> Result<(), String> {
+    let conn = state.lock_conn()?;
+    conn.execute("UPDATE notifications SET read = 1 WHERE id = ?1", params![id])
+        .map_err(|e| format!("Failed to mark notification read: {e}"))?;
+    Ok(())
+}
+
+pub fn delete_notification(state: &DbState, id: &str) -> Result<(), String> {
+    let conn = state.lock_conn()?;
+    conn.execute("DELETE FROM notifications WHERE id = ?1", params![id])
+        .map_err(|e| format!("Failed to delete notification: {e}"))?;
+    Ok(())
+}
+
+pub fn clear_notifications(state: &DbState) -> Result<usize, String> {
+    let conn = state.lock_conn()?;
+    conn.execute("DELETE FROM notifications", [])
+        .map_err(|e| format!("Failed to clear notifications: {e}"))
 }
 
 // ============================================================================
@@ -885,7 +1048,7 @@ pub fn add_folder(
 pub fn list_folders(state: &DbState) -> Result<Vec<QuickFolder>, String> {
     let conn = state.lock_conn()?;
     let mut stmt = conn
-        .prepare("SELECT id, name, path, icon, sort_order, created_at FROM folders ORDER BY sort_order ASC")
+        .prepare_cached("SELECT id, name, path, icon, sort_order, created_at FROM folders ORDER BY sort_order ASC")
         .map_err(|e| format!("Failed to prepare folders query: {e}"))?;
 
     let rows = stmt
@@ -965,7 +1128,7 @@ pub fn add_favourite_app(
 pub fn list_favourite_apps(state: &DbState) -> Result<Vec<FavouriteApp>, String> {
     let conn = state.lock_conn()?;
     let mut stmt = conn
-        .prepare(
+        .prepare_cached(
             r#"
             SELECT id, name, executable_path, arguments, icon_b64, sort_order, created_at
             FROM favourite_applications
@@ -1009,7 +1172,7 @@ pub fn delete_favourite_app(state: &DbState, id: &str) -> Result<(), String> {
 pub fn get_all_settings(state: &DbState) -> Result<HashMap<String, String>, String> {
     let conn = state.lock_conn()?;
     let mut stmt = conn
-        .prepare("SELECT key, value FROM settings")
+        .prepare_cached("SELECT key, value FROM settings")
         .map_err(|e| format!("Failed to prepare settings query: {e}"))?;
 
     let mut map = HashMap::new();
@@ -1054,6 +1217,64 @@ pub fn restore_default_settings(state: &DbState) -> Result<HashMap<String, Strin
         }
     }
     get_all_settings(state)
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StorageOptimizationReport {
+    pub removed_orphan_vault_files: usize,
+    pub reclaimed_bytes: u64,
+    pub db_size_bytes: u64,
+}
+
+/// Runs incremental SQLite vacuum + WAL truncation checkpoint and prunes any
+/// orphaned files in `vault/` that are no longer referenced in `held_files`.
+pub fn optimize_storage(state: &DbState) -> Result<StorageOptimizationReport, String> {
+    let referenced: std::collections::HashSet<String> = {
+        let conn = state.lock_conn()?;
+        let _ = conn.execute_batch("PRAGMA incremental_vacuum; PRAGMA wal_checkpoint(TRUNCATE); PRAGMA shrink_memory;");
+        let mut stmt = conn
+            .prepare("SELECT vault_path FROM held_files WHERE vault_path IS NOT NULL")
+            .map_err(|e| format!("Failed to query vault references: {e}"))?;
+        let paths = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| format!("Failed to read vault references: {e}"))?
+            .filter_map(Result::ok)
+            .collect();
+        paths
+    };
+
+    let mut removed_orphan_vault_files = 0usize;
+    let mut reclaimed_bytes = 0u64;
+
+    if let Ok(entries) = fs::read_dir(&state.vault_dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_file() {
+                let p_str = p.to_string_lossy().to_string();
+                if !referenced.contains(&p_str) {
+                    let len = fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
+                    if fs::remove_file(&p).is_ok() {
+                        removed_orphan_vault_files += 1;
+                        reclaimed_bytes += len;
+                    }
+                }
+            }
+        }
+    }
+
+    let db_path = state.vault_dir.parent().map(|p| p.join("glassdesk.db"));
+    let db_size_bytes = db_path
+        .and_then(|p| fs::metadata(p).ok())
+        .map(|m| m.len())
+        .unwrap_or(0);
+
+    Ok(StorageOptimizationReport {
+        removed_orphan_vault_files,
+        reclaimed_bytes,
+        db_size_bytes,
+    })
 }
 
 #[cfg(test)]
@@ -1134,6 +1355,33 @@ mod tests {
         remove_held_file(&state, &held.id).expect("remove held file");
         assert!(sample.exists(), "Original file must never be deleted");
         assert!(!Path::new(&vault_path).exists());
+
+        // Create an orphaned vault file and verify optimize_storage prunes it
+        let orphan = state.vault_dir.join("orphan.tmp");
+        fs::write(&orphan, "stale bytes").expect("write orphan");
+        let report = optimize_storage(&state).expect("optimize storage");
+        assert_eq!(report.removed_orphan_vault_files, 1);
+        assert!(!orphan.exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_notifications_crud() {
+        let (state, dir) = temp_db();
+        let item = push_notification(&state, "Focus Done", "25m session complete", "timer")
+            .expect("push notification");
+        assert!(!item.read);
+        assert_eq!(item.category, "timer");
+
+        mark_notification_read(&state, &item.id).expect("mark read");
+        let list = list_notifications(&state).expect("list notifications");
+        assert_eq!(list.len(), 1);
+        assert!(list[0].read);
+
+        let cleared = clear_notifications(&state).expect("clear notifications");
+        assert_eq!(cleared, 1);
+        assert!(list_notifications(&state).expect("list empty").is_empty());
 
         let _ = fs::remove_dir_all(&dir);
     }

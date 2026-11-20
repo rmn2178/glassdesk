@@ -1,7 +1,7 @@
 {
   "name": "glassdesk",
-  "version": "1.0.0",
-  "description": "GLASSDESK — Windows 11 Liquid Glass Dynamic Island desktop overlay built with Rust & Tauri 2",
+  "version": "2.0.0",
+  "description": "GLASSDESK — Windows 11 macOS-Inspired Liquid Glass Dynamic Island desktop companion built with Rust & Tauri 2",
   "private": true,
   "type": "module",
   "scripts": {
