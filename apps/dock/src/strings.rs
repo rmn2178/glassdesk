@@ -76,6 +76,15 @@ pub struct Strings {
     pub cc_ethernet: &'static str,
     pub cc_lock: &'static str,
     pub cc_settings: &'static str,
+    pub notif_title: &'static str,
+    pub notif_clear_all: &'static str,
+    pub notif_empty: &'static str,
+    pub notif_settings: &'static str,
+    pub notif_now: &'static str,
+    pub notif_network_offline: &'static str,
+    pub notif_network_online: &'static str,
+    pub notif_bt_on: &'static str,
+    pub notif_bt_off: &'static str,
 }
 
 /// 0 = not chosen yet (follow Windows). Nonzero values identify static catalogs.

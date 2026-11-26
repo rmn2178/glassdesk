@@ -60,4 +60,13 @@ pub(super) const TEXT: Strings = Strings {
     cc_ethernet: "ईथरनेट",
     cc_lock: "लॉक",
     cc_settings: "सेटिंग्स",
+    notif_title: "सूचनाएँ",
+    notif_clear_all: "सभी साफ़ करें",
+    notif_empty: "कोई सूचना नहीं",
+    notif_settings: "सूचना सेटिंग्स",
+    notif_now: "अभी",
+    notif_network_offline: "नेटवर्क डिस्कनेक्ट",
+    notif_network_online: "नेटवर्क कनेक्ट",
+    notif_bt_on: "ब्लूटूथ चालू",
+    notif_bt_off: "ब्लूटूथ बंद",
 };

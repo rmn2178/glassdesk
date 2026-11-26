@@ -92,6 +92,7 @@ pub use events::{
     menu_bar_accessories_changed, menu_bar_accessories_reset, menu_bar_audio_changed,
     menu_bar_bluetooth_changed, menu_bar_brightness_flush, menu_bar_check_pointer,
     menu_bar_clicked, menu_bar_control_center_changed, menu_bar_dismiss_island,
+    menu_bar_notification_banner_timeout, menu_bar_notifications_changed,
     menu_bar_finish_hide, menu_bar_media_changed, menu_bar_monitor_tick, menu_bar_pointer_moved,
     menu_bar_progress_tick, menu_bar_registry_changed, menu_bar_scrolled, menu_bar_tick,
     menu_bar_volume_flush, menu_bar_volume_press, menu_bar_volume_release,

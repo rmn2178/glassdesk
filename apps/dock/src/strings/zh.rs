@@ -60,4 +60,13 @@ pub(super) const TEXT: Strings = Strings {
     cc_ethernet: "以太网",
     cc_lock: "锁屏",
     cc_settings: "设置",
+    notif_title: "通知",
+    notif_clear_all: "全部清除",
+    notif_empty: "没有通知",
+    notif_settings: "通知设置",
+    notif_now: "刚刚",
+    notif_network_offline: "网络已断开",
+    notif_network_online: "网络已连接",
+    notif_bt_on: "蓝牙已开启",
+    notif_bt_off: "蓝牙已关闭",
 };

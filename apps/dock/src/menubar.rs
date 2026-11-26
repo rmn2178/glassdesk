@@ -76,6 +76,7 @@ use crate::{
     gfx::{Gfx, Ink, LabelBrush},
     mascot,
     media::{self, Control as MediaControl, Track},
+    notifications::{self, Category as NotificationCategory, Center as NotificationCenter},
     scene::Theme,
     strings,
     usage::{
@@ -96,9 +97,14 @@ const AUDIO_CHANGED: u32 = WM_APP + 32;
 const AUDIO_TICK: u32 = WM_APP + 33;
 const BLUETOOTH_CHANGED: u32 = WM_APP + 34;
 const CONTROL_CENTER_CHANGED: u32 = WM_APP + 35;
+const NOTIFICATIONS_CHANGED: u32 = WM_APP + 36;
 const VOLUME_TIMER: usize = 4;
 const BRIGHTNESS_TIMER: usize = 8;
+const NOTIFICATION_BANNER_TIMER: usize = 9;
 const CONTROL_CENTER_WIDTH: f32 = 320.0;
+const NOTIFICATION_PANEL_WIDTH: f32 = 340.0;
+const NOTIFICATION_BANNER_HEIGHT: f32 = 74.0;
+const NOTIFICATION_BANNER_MS: u32 = 5_000;
 const PROGRESS_TIMER: usize = 5;
 /// The system monitor's samples (issue #64): every 2 s while it shows, and
 /// a first one soon after it appears.
@@ -187,6 +193,8 @@ pub(crate) mod glyph {
     pub const SNIP: char = '\u{E8C6}';
     pub const LOCK: char = '\u{E72E}';
     pub const SETTINGS: char = '\u{E713}';
+    pub const CLOSE: char = '\u{E711}';
+    pub const APP_BADGE: char = '\u{E7E7}';
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -272,6 +280,7 @@ struct Look {
     usage_refreshing: bool,
     track: Option<Track>,
     control_center: control_center::State,
+    notifications: notifications::Snapshot,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -295,6 +304,10 @@ impl Look {
         match self.panel {
             Some(Island::Music) => 180.0,
             Some(Island::ControlCenter) => control_center_height(self.track.is_some()),
+            Some(Island::Notifications) => {
+                notifications_panel_height(self.notifications.items.len())
+            }
+            Some(Island::NotificationBanner) => NOTIFICATION_BANNER_HEIGHT,
             Some(Island::Usage) => {
                 74.0 + Provider::ALL
                     .into_iter()
@@ -308,7 +321,7 @@ impl Look {
 
     fn panel_height(&self) -> f32 {
         let natural = self.panel_content_height();
-        if self.panel == Some(Island::Usage) {
+        if matches!(self.panel, Some(Island::Usage | Island::Notifications)) {
             let available = (self.screen.bottom - self.screen.top) as f32 / self.scale
                 - HEIGHT
                 - PANEL_GAP
@@ -325,6 +338,8 @@ enum Island {
     Music,
     Usage,
     ControlCenter,
+    Notifications,
+    NotificationBanner,
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -373,6 +388,16 @@ enum ControlCenterAction {
 }
 
 #[derive(Clone, Copy)]
+enum NotificationAction {
+    OpenCenter,
+    Dismiss(u64),
+    DismissBanner,
+    ClearAll,
+    ToggleDoNotDisturb,
+    OpenSettings,
+}
+
+#[derive(Clone, Copy)]
 enum IslandAction {
     Toggle(Island),
     Media(MediaControl),
@@ -383,6 +408,7 @@ enum IslandAction {
     Refresh,
     ScrollUsage(i8),
     ControlCenter(ControlCenterAction),
+    Notification(NotificationAction),
 }
 
 #[derive(Clone, Copy)]
@@ -655,6 +681,9 @@ pub struct MenuBar {
         CompositionSurfaceBrush,
     )>,
     control_center: Option<control_center::Controller>,
+    notifications: NotificationCenter,
+    notification_watcher: Option<notifications::Watcher>,
+    started_at: Instant,
     slider_drag: Option<SliderDrag>,
     pending_volume: Option<u8>,
     volume_target: Option<u8>,
@@ -720,6 +749,7 @@ unsafe extern "system" fn bar_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM) -
         WM_TIMER if w.0 == POINTER_TIMER => app::menu_bar_check_pointer(),
         WM_TIMER if w.0 == VOLUME_TIMER => app::menu_bar_volume_flush(),
         WM_TIMER if w.0 == BRIGHTNESS_TIMER => app::menu_bar_brightness_flush(),
+        WM_TIMER if w.0 == NOTIFICATION_BANNER_TIMER => app::menu_bar_notification_banner_timeout(),
         WM_TIMER if w.0 == PROGRESS_TIMER => app::menu_bar_progress_tick(),
         WM_TIMER if w.0 == MONITOR_TIMER => app::menu_bar_monitor_tick(),
         WM_CAPTURECHANGED => {
@@ -742,6 +772,7 @@ unsafe extern "system" fn bar_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM) -
         MEDIA_CHANGED => app::menu_bar_media_changed(),
         BLUETOOTH_CHANGED => app::menu_bar_bluetooth_changed(),
         CONTROL_CENTER_CHANGED => app::menu_bar_control_center_changed(),
+        NOTIFICATIONS_CHANGED => app::menu_bar_notifications_changed(),
         AUDIO_CHANGED => {
             if !AUDIO_TICK_PENDING.swap(true, Ordering::Relaxed) {
                 unsafe {
@@ -1344,6 +1375,9 @@ impl MenuBar {
             media_enabled,
             cover: None,
             control_center: control_center::Controller::start(hwnd, CONTROL_CENTER_CHANGED),
+            notifications: NotificationCenter::new(),
+            notification_watcher: notifications::Watcher::start(hwnd, NOTIFICATIONS_CHANGED),
+            started_at: Instant::now(),
             slider_drag: None,
             pending_volume: None,
             volume_target: None,
@@ -1796,7 +1830,10 @@ impl MenuBar {
         // Control Center behaves like macOS: it stays open until outside click,
         // Escape, or clicking its menu bar toggle again.
         if self.panel.is_some()
-            && self.panel != Some(Island::ControlCenter)
+            && !matches!(
+                self.panel,
+                Some(Island::ControlCenter | Island::Notifications | Island::NotificationBanner)
+            )
             && (x < span.left || x >= span.right)
         {
             self.dismiss_island(gfx)?;
@@ -1806,6 +1843,13 @@ impl MenuBar {
 
     pub fn dismiss_island(&mut self, gfx: &Gfx) -> Result<()> {
         self.release_volume(None)?;
+        // SAFETY: Cancels our own one-shot banner timer if active.
+        unsafe {
+            let _ = KillTimer(Some(self.hwnd), NOTIFICATION_BANNER_TIMER);
+        }
+        if self.panel == Some(Island::NotificationBanner) {
+            self.notifications.dismiss_banner();
+        }
         if self.panel.take().is_some() {
             self.refresh(gfx)?;
         }
@@ -2039,6 +2083,68 @@ impl MenuBar {
         self.apply_look(gfx, look)
     }
 
+    pub fn notifications_changed(&mut self, gfx: &Gfx) -> Result<()> {
+        let Some(watcher) = &self.notification_watcher else {
+            return Ok(());
+        };
+        let incoming = watcher.take_incoming();
+        if incoming.is_empty() {
+            return Ok(());
+        }
+        let dnd = shell_cc::do_not_disturb();
+        if self.notifications.merge_windows(incoming, dnd) {
+            self.show_notification_banner();
+        }
+        self.refresh(gfx)
+    }
+
+    pub fn notification_banner_timeout(&mut self, gfx: &Gfx) -> Result<()> {
+        // SAFETY: Cancels our own one-shot banner timer.
+        unsafe {
+            let _ = KillTimer(Some(self.hwnd), NOTIFICATION_BANNER_TIMER);
+        }
+        self.notifications.dismiss_banner();
+        if self.panel == Some(Island::NotificationBanner) {
+            self.panel = None;
+            return self.refresh(gfx);
+        }
+        Ok(())
+    }
+
+    fn show_notification_banner(&mut self) {
+        if self.panel.is_none() || self.panel == Some(Island::NotificationBanner) {
+            self.panel = Some(Island::NotificationBanner);
+            // SAFETY: One-shot timer on our own live MenuBar window.
+            unsafe {
+                SetTimer(
+                    Some(self.hwnd),
+                    NOTIFICATION_BANNER_TIMER,
+                    NOTIFICATION_BANNER_MS,
+                    None,
+                );
+            }
+        }
+    }
+
+    fn push_notification(
+        &mut self,
+        title: &str,
+        body: &str,
+        category: NotificationCategory,
+    ) {
+        let dnd = shell_cc::do_not_disturb();
+        if self.notifications.push(
+            "Nosih",
+            title,
+            body,
+            strings::text().notif_now,
+            category,
+            dnd,
+        ) {
+            self.show_notification_banner();
+        }
+    }
+
     pub fn bluetooth_changed(&mut self, gfx: &Gfx) -> Result<()> {
         let on = self
             .bluetooth
@@ -2051,7 +2157,17 @@ impl MenuBar {
         if look.status.bluetooth_on == on {
             return Ok(());
         }
+        if self.started_at.elapsed() >= Duration::from_secs(4) {
+            let t = strings::text();
+            self.push_notification(
+                if on { t.notif_bt_on } else { t.notif_bt_off },
+                t.cc_bluetooth,
+                NotificationCategory::Bluetooth,
+            );
+        }
         look.status.bluetooth_on = on;
+        look.notifications = self.notifications.snapshot();
+        look.panel = self.panel;
         self.apply_look(gfx, look)
     }
 
@@ -2172,6 +2288,45 @@ impl MenuBar {
                     }
                     return Ok(());
                 }
+                IslandAction::Notification(action) => {
+                    match action {
+                        NotificationAction::OpenCenter => {
+                            unsafe {
+                                let _ = KillTimer(Some(self.hwnd), NOTIFICATION_BANNER_TIMER);
+                            }
+                            self.notifications.dismiss_banner();
+                            return self.open_notifications_panel(gfx);
+                        }
+                        NotificationAction::Dismiss(id) => {
+                            self.notifications.dismiss(id);
+                            if self.panel == Some(Island::NotificationBanner) {
+                                unsafe {
+                                    let _ = KillTimer(Some(self.hwnd), NOTIFICATION_BANNER_TIMER);
+                                }
+                                self.panel = None;
+                            }
+                            return self.refresh(gfx);
+                        }
+                        NotificationAction::DismissBanner => {
+                            return self.notification_banner_timeout(gfx);
+                        }
+                        NotificationAction::ClearAll => {
+                            self.notifications.clear_all();
+                            return self.refresh(gfx);
+                        }
+                        NotificationAction::ToggleDoNotDisturb => {
+                            if let Some(cc) = &self.control_center {
+                                cc.toggle_do_not_disturb();
+                            }
+                            return Ok(());
+                        }
+                        NotificationAction::OpenSettings => {
+                            self.dismiss_island(gfx)?;
+                            let _ = launcher::open("ms-settings:notifications");
+                            return Ok(());
+                        }
+                    }
+                }
             }
             return self.refresh(gfx);
         }
@@ -2179,6 +2334,7 @@ impl MenuBar {
             return Ok(());
         }
         let was_control_center = self.panel == Some(Island::ControlCenter);
+        let was_notifications = self.panel == Some(Island::Notifications);
         self.dismiss_island(gfx)?;
         let hit = self
             .zones
@@ -2210,12 +2366,20 @@ impl MenuBar {
                     return self.refresh(gfx);
                 }
             }
-            Some(Action::Notifications) => launcher::open_notifications(),
+            Some(Action::Notifications) => {
+                if !was_notifications {
+                    self.open_notifications_panel(gfx)?;
+                }
+            }
             Some(Action::Clock) => match &self.clock_target {
                 // A target that no longer opens (an uninstalled app) falls
-                // back to what the clock always opened.
+                // back to Nosih's native macOS-style Notification Center.
                 Some(target) if launcher::open(target).is_ok() => {}
-                _ => launcher::open_notifications(),
+                _ => {
+                    if !was_notifications {
+                        self.open_notifications_panel(gfx)?;
+                    }
+                }
             },
             Some(Action::Power) => launcher::open_power_settings(),
             Some(Action::Network) => launcher::open_network_list(),
@@ -2239,6 +2403,22 @@ impl MenuBar {
             None => {}
         }
         Ok(())
+    }
+
+    fn open_notifications_panel(&mut self, gfx: &Gfx) -> Result<()> {
+        self.panel = Some(Island::Notifications);
+        let mut track = TRACKMOUSEEVENT {
+            cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
+            dwFlags: TME_LEAVE,
+            hwndTrack: self.hwnd,
+            dwHoverTime: 0,
+        };
+        // SAFETY: `track` describes our live window.
+        unsafe { TrackMouseEvent(&mut track)? };
+        if let Some(watcher) = &self.notification_watcher {
+            watcher.refresh();
+        }
+        self.refresh(gfx)
     }
 
     pub fn input_switcher_anchor(&self, x: f32, y: f32) -> Option<POINT> {
@@ -2273,7 +2453,12 @@ impl MenuBar {
             ActiveProviders::default()
         };
         let track = self.media.as_ref().and_then(media::Watch::snapshot);
-        self.panel = available_panel(self.panel, track.is_some(), active_providers.any());
+        self.panel = available_panel(
+            self.panel,
+            track.is_some(),
+            active_providers.any(),
+            self.notifications.snapshot().banner.is_some(),
+        );
         if !active_providers.any() {
             if let Some(usage) = &mut self.usage {
                 usage.mark_inactive();
@@ -2321,6 +2506,7 @@ impl MenuBar {
                 state.do_not_disturb = shell_cc::do_not_disturb();
                 state
             },
+            notifications: self.notifications.snapshot(),
         };
         self.apply_look(gfx, look)
     }
@@ -2419,7 +2605,12 @@ impl MenuBar {
             self.look = Some(look);
             return self.progress_tick(gfx);
         }
-        self.panel = available_panel(self.panel, look.track.is_some(), look.usage_enabled);
+        self.panel = available_panel(
+            self.panel,
+            look.track.is_some(),
+            look.usage_enabled,
+            look.notifications.banner.is_some(),
+        );
         look.panel = self.panel;
         self.apply_look(gfx, look)
     }
@@ -2427,7 +2618,12 @@ impl MenuBar {
     fn apply_look(&mut self, gfx: &Gfx, mut look: Look) -> Result<()> {
         look.active_providers = look.usage.visible_providers(look.active_providers);
         look.usage_enabled &= look.active_providers.any();
-        self.panel = available_panel(look.panel, look.track.is_some(), look.usage_enabled);
+        self.panel = available_panel(
+            look.panel,
+            look.track.is_some(),
+            look.usage_enabled,
+            look.notifications.banner.is_some(),
+        );
         look.panel = self.panel;
         if look.panel != Some(Island::Usage) {
             self.usage_scroll = 0.0;
@@ -2547,6 +2743,25 @@ impl MenuBar {
     }
 
     fn network_cue(&mut self, act: mascot::Act) {
+        let t = strings::text();
+        match act {
+            mascot::Act::NetworkDown => {
+                self.push_notification(
+                    t.notif_network_offline,
+                    t.cc_wifi,
+                    NotificationCategory::Network,
+                );
+            }
+            mascot::Act::NetworkUp => {
+                let body = shell_cc::wifi_name().unwrap_or_else(|| t.cc_ethernet.to_owned());
+                self.push_notification(
+                    t.notif_network_online,
+                    &body,
+                    NotificationCategory::Network,
+                );
+            }
+            _ => {}
+        }
         let x = self
             .zones
             .iter()
@@ -2812,6 +3027,18 @@ impl MenuBar {
                 left: 0.0,
                 right: width,
             };
+        } else if look.panel == Some(Island::Notifications) {
+            self.draw_notifications_panel(gfx, look, &layers, width, height)?;
+            self.triggers_span = Span {
+                left: 0.0,
+                right: width,
+            };
+        } else if look.panel == Some(Island::NotificationBanner) {
+            self.draw_notification_banner(gfx, look, &layers, width, height)?;
+            self.triggers_span = Span {
+                left: 0.0,
+                right: width,
+            };
         }
         if let Some(drag) = self.slider_drag {
             let still_present = self.island_hits.iter().any(|hit| match (drag, hit.action) {
@@ -3025,12 +3252,14 @@ impl MenuBar {
                         .map(|(provider, x)| (provider, look.screen.left + (span.left + x) as i32))
                         .collect();
                 }
-                Island::ControlCenter => {}
+                Island::ControlCenter | Island::Notifications | Island::NotificationBanner => {}
             }
             let (left, right) = match kind {
                 Island::Music => (span.left, divider.unwrap_or(span.right)),
                 Island::Usage => (divider.unwrap_or(span.left), span.right),
-                Island::ControlCenter => (span.left, span.right),
+                Island::ControlCenter | Island::Notifications | Island::NotificationBanner => {
+                    (span.left, span.right)
+                }
             };
             self.island_hits.push(IslandHit {
                 bounds: (left, 0.0, right, bar_height),
@@ -3043,6 +3272,7 @@ impl MenuBar {
                 Island::Music => 360.0,
                 Island::Usage => ISLAND_EXPANDED_WIDTH,
                 Island::ControlCenter => CONTROL_CENTER_WIDTH,
+                Island::Notifications | Island::NotificationBanner => NOTIFICATION_PANEL_WIDTH,
             });
             self.panel_span = match style {
                 IslandStyle::Notch => panel_span(span, width, desired),
@@ -3084,9 +3314,525 @@ impl MenuBar {
                 Island::Usage => {
                     self.draw_usage_panel(gfx, &content, geometry, height, look, &providers)?
                 }
-                Island::ControlCenter => {}
+                Island::ControlCenter | Island::Notifications | Island::NotificationBanner => {}
             }
         }
+        Ok(())
+    }
+
+    /// Renders a macOS-style floating glass notification banner at the top-right
+    /// beneath the menu bar, replacing normal Windows toast popups.
+    fn draw_notification_banner(
+        &mut self,
+        gfx: &Gfx,
+        look: &Look,
+        layers: &VisualCollection,
+        screen_width: f32,
+        bar_height: f32,
+    ) -> Result<()> {
+        let Some(item) = &look.notifications.banner else {
+            return Ok(());
+        };
+        let px = |logical: f32| (logical * look.scale).round();
+        let panel_w =
+            px(NOTIFICATION_PANEL_WIDTH).min((screen_width - px(SIDE_MARGIN) * 2.0).max(0.0));
+        let panel_left = (screen_width - px(SIDE_MARGIN) - panel_w).max(0.0).round();
+        self.panel_span = Span {
+            left: panel_left,
+            right: panel_left + panel_w,
+        };
+        let geometry = IslandGeometry::new(self.panel_span, bar_height + px(PANEL_GAP), look);
+        let height = px(NOTIFICATION_BANNER_HEIGHT);
+        let theme = Theme::for_popup(look.light, look.glass);
+        let content = popup_surface(gfx, theme, layers, geometry, height, px(PANEL_RADIUS))?;
+        let c = &gfx.compositor;
+        let ink = geometry.ink();
+
+        let (badge_color, badge_glyph) = notification_badge(item.category);
+        let badge = px(34.0);
+        let bx = px(14.0);
+        let by = (height - badge) / 2.0;
+        add_rounded_box(
+            c,
+            &content,
+            bx,
+            by,
+            badge,
+            badge,
+            px(9.0),
+            badge_color,
+            None,
+        )?;
+        let sym = gfx.glyph_brush(&[(badge_glyph, 0.95)], geometry.scale, Ink::Light)?;
+        add_visual(
+            c,
+            &content,
+            &sym.brush.cast()?,
+            bx + (badge - sym.width) / 2.0,
+            by + (badge - sym.height) / 2.0,
+            sym.width,
+            sym.height,
+        )?;
+
+        let close_size = px(24.0);
+        let close_x = geometry.width - px(10.0) - close_size;
+        let close_y = px(10.0);
+        let text_x = bx + badge + px(11.0);
+        let text_w = (close_x - text_x - px(8.0)).max(px(60.0));
+
+        let app_time = if item.timestamp.is_empty() {
+            item.app.clone()
+        } else {
+            format!("{}  ·  {}", item.app, item.timestamp)
+        };
+        let meta = gfx.text_brush_fitted(&app_time, geometry.scale, 10.0, false, ink, text_w)?;
+        add_visual(
+            c,
+            &content,
+            &meta.brush.cast()?,
+            text_x,
+            px(10.0),
+            meta.width,
+            meta.height,
+        )?
+        .SetOpacity(0.62)?;
+
+        let title = gfx.text_brush_fitted(&item.title, geometry.scale, 12.5, true, ink, text_w)?;
+        add_visual(
+            c,
+            &content,
+            &title.brush.cast()?,
+            text_x,
+            px(26.0),
+            title.width,
+            title.height,
+        )?;
+
+        if !item.body.is_empty() {
+            let body =
+                gfx.text_brush_fitted(&item.body, geometry.scale, 11.0, false, ink, text_w)?;
+            add_visual(
+                c,
+                &content,
+                &body.brush.cast()?,
+                text_x,
+                px(45.0),
+                body.width,
+                body.height,
+            )?
+            .SetOpacity(0.76)?;
+        }
+
+        let close_sym = gfx.glyph_brush(&[(glyph::CLOSE, 0.72)], geometry.scale, ink)?;
+        add_visual(
+            c,
+            &content,
+            &close_sym.brush.cast()?,
+            close_x + (close_size - close_sym.width) / 2.0,
+            close_y + (close_size - close_sym.height) / 2.0,
+            close_sym.width,
+            close_sym.height,
+        )?
+        .SetOpacity(0.65)?;
+        self.island_hits.push(geometry.hit(
+            close_x,
+            close_y,
+            close_size,
+            close_size,
+            IslandAction::Notification(NotificationAction::DismissBanner),
+        ));
+        self.island_hits.push(geometry.hit(
+            0.0,
+            0.0,
+            close_x,
+            height,
+            IslandAction::Notification(NotificationAction::OpenCenter),
+        ));
+        Ok(())
+    }
+
+    /// Renders Nosih's native macOS-style Notification Center (monthly calendar,
+    /// Focus pill, and stacked glass notification cards) beneath the top-right clock.
+    fn draw_notifications_panel(
+        &mut self,
+        gfx: &Gfx,
+        look: &Look,
+        layers: &VisualCollection,
+        screen_width: f32,
+        bar_height: f32,
+    ) -> Result<()> {
+        let px = |logical: f32| (logical * look.scale).round();
+        let panel_w =
+            px(NOTIFICATION_PANEL_WIDTH).min((screen_width - px(SIDE_MARGIN) * 2.0).max(0.0));
+        let panel_left = (screen_width - px(SIDE_MARGIN) - panel_w).max(0.0).round();
+        self.panel_span = Span {
+            left: panel_left,
+            right: panel_left + panel_w,
+        };
+        let geometry = IslandGeometry::new(self.panel_span, bar_height + px(PANEL_GAP), look);
+        let height = px(look.panel_height());
+        let theme = Theme::for_popup(look.light, look.glass);
+        let content = popup_surface(gfx, theme, layers, geometry, height, px(PANEL_RADIUS))?;
+        let c = &gfx.compositor;
+        let ink = geometry.ink();
+        let t = strings::text();
+
+        let card_fill = if look.light {
+            rgba(255, 255, 255, 138)
+        } else {
+            rgba(255, 255, 255, 22)
+        };
+        let card_border = if look.light {
+            rgba(0, 0, 0, 20)
+        } else {
+            rgba(255, 255, 255, 26)
+        };
+        let accent_focus = rgba(94, 92, 230, 255);
+        let accent_today = rgba(255, 59, 48, 255);
+
+        let pad = px(12.0);
+        let inner_w = geometry.width - pad * 2.0;
+        let card_r = px(12.0);
+
+        // --- Header: Title + Focus toggle + Clear All ---
+        let header_y = pad;
+        add_panel_text(
+            gfx,
+            &content,
+            t.notif_title,
+            pad + px(4.0),
+            header_y + px(3.0),
+            geometry.scale,
+            13.5,
+            true,
+            ink,
+            0.94,
+        )?;
+
+        let mut right_edge = pad + inner_w;
+        if !look.notifications.items.is_empty() {
+            let clear_lbl =
+                gfx.text_brush_sized(t.notif_clear_all, geometry.scale, 10.5, false, ink)?;
+            let clear_w = clear_lbl.width + px(16.0);
+            let clear_h = px(24.0);
+            let clear_x = right_edge - clear_w;
+            add_rounded_box(
+                c,
+                &content,
+                clear_x,
+                header_y,
+                clear_w,
+                clear_h,
+                clear_h / 2.0,
+                card_fill,
+                Some(card_border),
+            )?;
+            add_visual(
+                c,
+                &content,
+                &clear_lbl.brush.cast()?,
+                clear_x + px(8.0),
+                header_y + (clear_h - clear_lbl.height) / 2.0,
+                clear_lbl.width,
+                clear_lbl.height,
+            )?
+            .SetOpacity(0.86)?;
+            self.island_hits.push(geometry.hit(
+                clear_x,
+                header_y,
+                clear_w,
+                clear_h,
+                IslandAction::Notification(NotificationAction::ClearAll),
+            ));
+            right_edge = clear_x - px(6.0);
+        }
+
+        let dnd = look.control_center.do_not_disturb;
+        let focus_h = px(24.0);
+        let focus_sym = gfx.glyph_brush(
+            &[(glyph::FOCUS, 0.78)],
+            geometry.scale,
+            if dnd { Ink::Light } else { ink },
+        )?;
+        let focus_w = focus_sym.width + px(14.0);
+        let focus_x = right_edge - focus_w;
+        add_rounded_box(
+            c,
+            &content,
+            focus_x,
+            header_y,
+            focus_w,
+            focus_h,
+            focus_h / 2.0,
+            if dnd { accent_focus } else { card_fill },
+            Some(card_border),
+        )?;
+        add_visual(
+            c,
+            &content,
+            &focus_sym.brush.cast()?,
+            focus_x + (focus_w - focus_sym.width) / 2.0,
+            header_y + (focus_h - focus_sym.height) / 2.0,
+            focus_sym.width,
+            focus_sym.height,
+        )?;
+        self.island_hits.push(geometry.hit(
+            focus_x,
+            header_y,
+            focus_w,
+            focus_h,
+            IslandAction::Notification(NotificationAction::ToggleDoNotDisturb),
+        ));
+
+        // --- Compact macOS Calendar Card ---
+        let cal_y = header_y + px(32.0);
+        let cal_h = px(160.0);
+        add_rounded_box(
+            c,
+            &content,
+            pad,
+            cal_y,
+            inner_w,
+            cal_h,
+            card_r,
+            card_fill,
+            Some(card_border),
+        )?;
+        let month = notifications::current_month();
+        add_panel_text(
+            gfx,
+            &content,
+            &month.title,
+            pad + px(12.0),
+            cal_y + px(8.0),
+            geometry.scale,
+            11.5,
+            true,
+            ink,
+            0.92,
+        )?;
+        let col_w = (inner_w - px(16.0)) / 7.0;
+        let grid_x = pad + px(8.0);
+        for (col, day_name) in ["S", "M", "T", "W", "T", "F", "S"].into_iter().enumerate() {
+            let lbl = gfx.text_brush_sized(day_name, geometry.scale, 9.5, true, ink)?;
+            add_visual(
+                c,
+                &content,
+                &lbl.brush.cast()?,
+                grid_x + col_w * col as f32 + (col_w - lbl.width) / 2.0,
+                cal_y + px(28.0),
+                lbl.width,
+                lbl.height,
+            )?
+            .SetOpacity(0.55)?;
+        }
+        let cell_h = px(17.5);
+        let days_top = cal_y + px(44.0);
+        for day in 1..=month.days_in_month {
+            let slot = month.first_weekday + (day - 1) as usize;
+            let row = slot / 7;
+            let col = slot % 7;
+            let cx = grid_x + col_w * col as f32;
+            let cy = days_top + cell_h * row as f32;
+            let is_today = day == month.today;
+            if is_today {
+                let pill = px(17.0);
+                add_rounded_box(
+                    c,
+                    &content,
+                    cx + (col_w - pill) / 2.0,
+                    cy + (cell_h - pill) / 2.0,
+                    pill,
+                    pill,
+                    pill / 2.0,
+                    accent_today,
+                    None,
+                )?;
+            }
+            let num = gfx.text_brush_sized(
+                &day.to_string(),
+                geometry.scale,
+                10.0,
+                is_today,
+                if is_today { Ink::Light } else { ink },
+            )?;
+            add_visual(
+                c,
+                &content,
+                &num.brush.cast()?,
+                cx + (col_w - num.width) / 2.0,
+                cy + (cell_h - num.height) / 2.0,
+                num.width,
+                num.height,
+            )?
+            .SetOpacity(if is_today { 1.0 } else { 0.85 })?;
+        }
+
+        // --- Notification Cards (up to 4 most recent) ---
+        let mut cur_y = cal_y + cal_h + px(10.0);
+        if look.notifications.items.is_empty() {
+            let empty_h = px(62.0);
+            add_rounded_box(
+                c,
+                &content,
+                pad,
+                cur_y,
+                inner_w,
+                empty_h,
+                card_r,
+                card_fill,
+                Some(card_border),
+            )?;
+            let empty = gfx.text_brush_sized(t.notif_empty, geometry.scale, 11.5, false, ink)?;
+            add_visual(
+                c,
+                &content,
+                &empty.brush.cast()?,
+                pad + (inner_w - empty.width) / 2.0,
+                cur_y + (empty_h - empty.height) / 2.0,
+                empty.width,
+                empty.height,
+            )?
+            .SetOpacity(0.58)?;
+            cur_y += empty_h + px(10.0);
+        } else {
+            let item_h = px(62.0);
+            for item in look.notifications.items.iter().take(4) {
+                add_rounded_box(
+                    c,
+                    &content,
+                    pad,
+                    cur_y,
+                    inner_w,
+                    item_h,
+                    card_r,
+                    card_fill,
+                    Some(card_border),
+                )?;
+                let (badge_color, badge_glyph) = notification_badge(item.category);
+                let badge = px(28.0);
+                let bx = pad + px(10.0);
+                let by = cur_y + (item_h - badge) / 2.0;
+                add_rounded_box(
+                    c,
+                    &content,
+                    bx,
+                    by,
+                    badge,
+                    badge,
+                    px(8.0),
+                    badge_color,
+                    None,
+                )?;
+                let sym = gfx.glyph_brush(&[(badge_glyph, 0.85)], geometry.scale, Ink::Light)?;
+                add_visual(
+                    c,
+                    &content,
+                    &sym.brush.cast()?,
+                    bx + (badge - sym.width) / 2.0,
+                    by + (badge - sym.height) / 2.0,
+                    sym.width,
+                    sym.height,
+                )?;
+                let close_s = px(22.0);
+                let close_x = pad + inner_w - px(8.0) - close_s;
+                let close_y = cur_y + px(8.0);
+                let tx = bx + badge + px(10.0);
+                let tw = (close_x - tx - px(6.0)).max(px(40.0));
+                let title =
+                    gfx.text_brush_fitted(&item.title, geometry.scale, 11.5, true, ink, tw)?;
+                add_visual(
+                    c,
+                    &content,
+                    &title.brush.cast()?,
+                    tx,
+                    cur_y + px(11.0),
+                    title.width,
+                    title.height,
+                )?;
+                let sub_text = if item.body.is_empty() {
+                    item.app.as_str()
+                } else {
+                    item.body.as_str()
+                };
+                let sub = gfx.text_brush_fitted(sub_text, geometry.scale, 10.5, false, ink, tw)?;
+                add_visual(
+                    c,
+                    &content,
+                    &sub.brush.cast()?,
+                    tx,
+                    cur_y + px(29.0),
+                    sub.width,
+                    sub.height,
+                )?
+                .SetOpacity(0.70)?;
+
+                let close_sym = gfx.glyph_brush(&[(glyph::CLOSE, 0.65)], geometry.scale, ink)?;
+                add_visual(
+                    c,
+                    &content,
+                    &close_sym.brush.cast()?,
+                    close_x + (close_s - close_sym.width) / 2.0,
+                    close_y + (close_s - close_sym.height) / 2.0,
+                    close_sym.width,
+                    close_sym.height,
+                )?
+                .SetOpacity(0.58)?;
+                self.island_hits.push(geometry.hit(
+                    close_x,
+                    close_y,
+                    close_s,
+                    close_s,
+                    IslandAction::Notification(NotificationAction::Dismiss(item.id)),
+                ));
+                cur_y += item_h + px(8.0);
+            }
+            cur_y += px(2.0);
+        }
+
+        // --- Footer: Notification Settings button ---
+        let foot_h = px(32.0);
+        add_rounded_box(
+            c,
+            &content,
+            pad,
+            cur_y,
+            inner_w,
+            foot_h,
+            px(10.0),
+            card_fill,
+            Some(card_border),
+        )?;
+        let gear = gfx.glyph_brush(&[(glyph::SETTINGS, 0.8)], geometry.scale, ink)?;
+        let lbl = gfx.text_brush_sized(t.notif_settings, geometry.scale, 11.0, false, ink)?;
+        let total_w = gear.width + px(6.0) + lbl.width;
+        let sx = pad + (inner_w - total_w) / 2.0;
+        add_visual(
+            c,
+            &content,
+            &gear.brush.cast()?,
+            sx,
+            cur_y + (foot_h - gear.height) / 2.0,
+            gear.width,
+            gear.height,
+        )?;
+        add_visual(
+            c,
+            &content,
+            &lbl.brush.cast()?,
+            sx + gear.width + px(6.0),
+            cur_y + (foot_h - lbl.height) / 2.0,
+            lbl.width,
+            lbl.height,
+        )?
+        .SetOpacity(0.86)?;
+        self.island_hits.push(geometry.hit(
+            pad,
+            cur_y,
+            inner_w,
+            foot_h,
+            IslandAction::Notification(NotificationAction::OpenSettings),
+        ));
         Ok(())
     }
 
@@ -4632,6 +5378,25 @@ fn control_center_height(has_media: bool) -> f32 {
     if has_media { 388.0 } else { 320.0 }
 }
 
+fn notifications_panel_height(count: usize) -> f32 {
+    let cards = count.min(4);
+    let list_h = if cards == 0 {
+        72.0
+    } else {
+        cards as f32 * 70.0 + 2.0
+    };
+    // 12 pad + 32 header + 160 calendar + 10 gap + list_h + 32 footer + 12 pad
+    258.0 + list_h
+}
+
+fn notification_badge(category: NotificationCategory) -> (Color, char) {
+    match category {
+        NotificationCategory::Network => (rgba(10, 132, 255, 255), glyph::WIFI),
+        NotificationCategory::Bluetooth => (rgba(10, 132, 255, 255), glyph::BLUETOOTH),
+        NotificationCategory::App => (rgba(48, 209, 88, 255), glyph::APP_BADGE),
+    }
+}
+
 /// Prefer the player's right edge, then its left. On narrow displays reserve
 /// space for the capsule instead of covering the progress or playback buttons.
 fn volume_popover_layout(panel: Span, width: f32, scale: f32) -> (Span, Span) {
@@ -4736,11 +5501,17 @@ fn toggle_panel(open: Option<Island>, clicked: Island) -> Option<Island> {
     (open != Some(clicked)).then_some(clicked)
 }
 
-fn available_panel(open: Option<Island>, music: bool, usage: bool) -> Option<Island> {
+fn available_panel(
+    open: Option<Island>,
+    music: bool,
+    usage: bool,
+    banner: bool,
+) -> Option<Island> {
     open.filter(|island| match island {
         Island::Music => music,
         Island::Usage => usage,
-        Island::ControlCenter => true,
+        Island::ControlCenter | Island::Notifications => true,
+        Island::NotificationBanner => banner,
     })
 }
 
@@ -5467,6 +6238,7 @@ impl Drop for MenuBar {
         self.exit_animation = None;
         self.media = None;
         self.control_center = None;
+        self.notification_watcher = None;
         ISLAND_HOOK_WINDOW.store(0, Ordering::Relaxed);
         edge_watch::set_menu_bar(None);
         if let Some(hook) = self.outside_click_hook.take() {
@@ -6929,11 +7701,23 @@ mod island_tests {
 
     #[test]
     fn losing_a_session_closes_its_panel_without_opening_the_other() {
-        assert_eq!(available_panel(Some(Island::Music), false, true), None);
-        assert_eq!(available_panel(Some(Island::Usage), true, false), None);
+        assert_eq!(available_panel(Some(Island::Music), false, true, false), None);
+        assert_eq!(available_panel(Some(Island::Usage), true, false, false), None);
         assert_eq!(
-            available_panel(Some(Island::ControlCenter), false, false),
+            available_panel(Some(Island::ControlCenter), false, false, false),
             Some(Island::ControlCenter)
+        );
+        assert_eq!(
+            available_panel(Some(Island::Notifications), false, false, false),
+            Some(Island::Notifications)
+        );
+        assert_eq!(
+            available_panel(Some(Island::NotificationBanner), false, false, false),
+            None
+        );
+        assert_eq!(
+            available_panel(Some(Island::NotificationBanner), false, false, true),
+            Some(Island::NotificationBanner)
         );
     }
 
@@ -6958,6 +7742,9 @@ mod island_tests {
         let opened = toggle_panel(None, Island::ControlCenter);
         assert_eq!(opened, Some(Island::ControlCenter));
         assert_eq!(toggle_panel(opened, Island::ControlCenter), None);
+        assert_eq!(notifications_panel_height(0), 330.0);
+        assert_eq!(notifications_panel_height(2), 400.0);
+        assert_eq!(notifications_panel_height(10), 540.0);
     }
 
     #[test]

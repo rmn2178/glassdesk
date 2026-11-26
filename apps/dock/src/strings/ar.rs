@@ -60,4 +60,13 @@ pub(super) const TEXT: Strings = Strings {
     cc_ethernet: "إيثرنت",
     cc_lock: "قفل",
     cc_settings: "الإعدادات",
+    notif_title: "الإشعارات",
+    notif_clear_all: "مسح الكل",
+    notif_empty: "لا توجد إشعارات",
+    notif_settings: "إعدادات الإشعارات",
+    notif_now: "الآن",
+    notif_network_offline: "انقطع الاتصال بالشبكة",
+    notif_network_online: "تم الاتصال بالشبكة",
+    notif_bt_on: "تم تفعيل البلوتوث",
+    notif_bt_off: "تم إيقاف البلوتوث",
 };

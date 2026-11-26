@@ -60,4 +60,13 @@ pub(super) const TEXT: Strings = Strings {
     cc_ethernet: "ইথারনেট",
     cc_lock: "লক",
     cc_settings: "সেটিংস",
+    notif_title: "বিজ্ঞপ্তি",
+    notif_clear_all: "সব মুছুন",
+    notif_empty: "কোনো বিজ্ঞপ্তি নেই",
+    notif_settings: "বিজ্ঞপ্তি সেটিংস",
+    notif_now: "এখন",
+    notif_network_offline: "নেটওয়ার্ক বিচ্ছিন্ন",
+    notif_network_online: "নেটওয়ার্ক সংযুক্ত",
+    notif_bt_on: "ব্লুটুথ চালু",
+    notif_bt_off: "ব্লুটুথ বন্ধ",
 };

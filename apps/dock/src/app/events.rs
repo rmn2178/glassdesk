@@ -181,6 +181,20 @@ pub fn menu_bar_control_center_changed() {
     });
 }
 
+pub fn menu_bar_notifications_changed() {
+    with_app("notificaciones", |app| match &mut app.menubar {
+        Some(bar) => bar.notifications_changed(&app.gfx),
+        None => Ok(()),
+    });
+}
+
+pub fn menu_bar_notification_banner_timeout() {
+    with_app("banner de notificación", |app| match &mut app.menubar {
+        Some(bar) => bar.notification_banner_timeout(&app.gfx),
+        None => Ok(()),
+    });
+}
+
 pub fn menu_bar_progress_tick() {
     with_app("progreso multimedia", |app| match &mut app.menubar {
         Some(bar) => bar.progress_tick(&app.gfx),
