@@ -202,6 +202,16 @@ impl Theme {
         }
     }
 
+    /// Popup surface that preserves Liquid Glass (optical lens coating, sheen,
+    /// bright curved rim, and translucent backdrop blur) while keeping text readable.
+    pub(crate) fn for_popup_look(look: Look) -> Self {
+        if look.material == Material::LiquidGlass {
+            Self::new(look)
+        } else {
+            Self::for_popup(look.light, look.glass)
+        }
+    }
+
     /// A fixed-size panel using the dock's backdrop, tint, sheen and rim.
     pub fn panel(
         &self,

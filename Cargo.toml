@@ -24,6 +24,7 @@ unwrap_used = "warn"
 expect_used = "warn"
 
 [profile.release]
+opt-level = 3
 lto = true
 codegen-units = 1
 strip = true

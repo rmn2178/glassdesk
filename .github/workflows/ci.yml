@@ -44,12 +44,17 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       # The Tauri settings binary embeds apps/settings/dist at compile time.
-      - name: Build and test Settings UI
+      - name: Install Settings UI dependencies
         working-directory: apps/settings
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm test
-          pnpm build
+        run: pnpm install --frozen-lockfile
+
+      - name: Test Settings UI
+        working-directory: apps/settings
+        run: pnpm test
+
+      - name: Build Settings UI
+        working-directory: apps/settings
+        run: pnpm build
 
       - name: Lint workspace with Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
@@ -68,9 +73,8 @@ jobs:
           Copy-Item target/release/nosih.exe dist-artifacts/nosih.exe -Force
           Copy-Item target/release/nosih-settings.exe dist-artifacts/nosih-settings.exe -Force
           $setup = Get-ChildItem target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
-          if ($setup) {
-            Copy-Item $setup.FullName dist-artifacts/Nosih-Setup.exe -Force
-          }
+          if (-not $setup) { throw 'NSIS installer was not produced' }
+          Copy-Item $setup.FullName dist-artifacts/Nosih-Setup.exe -Force
           Get-FileHash dist-artifacts/* -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash.ToLowerInvariant())  $(Split-Path -Leaf $_.Path)" } |
             Set-Content -Encoding utf8 dist-artifacts/SHA256SUMS.txt

@@ -197,7 +197,6 @@ pub(crate) mod glyph {
     pub const SETTINGS: char = '\u{E713}';
     pub const CLOSE: char = '\u{E711}';
     pub const APP_BADGE: char = '\u{E7E7}';
-    pub const SYSTEM_LOGO: char = '\u{E770}';
     pub const POWER: char = '\u{E7E8}';
     pub const RESTART: char = '\u{E777}';
     pub const INFO: char = '\u{E946}';
@@ -707,6 +706,7 @@ pub struct MenuBar {
         Option<Arc<nosih_shell::icons::IconImage>>,
         CompositionSurfaceBrush,
     )>,
+    logo_brush: Option<(bool, CompositionSurfaceBrush)>,
     control_center: Option<control_center::Controller>,
     notifications: NotificationCenter,
     notification_watcher: Option<notifications::Watcher>,
@@ -1401,6 +1401,7 @@ impl MenuBar {
                 .flatten(),
             media_enabled,
             cover: None,
+            logo_brush: None,
             control_center: control_center::Controller::start(hwnd, CONTROL_CENTER_CHANGED),
             notifications: NotificationCenter::new(),
             notification_watcher: notifications::Watcher::start(hwnd, NOTIFICATIONS_CHANGED),
@@ -1632,7 +1633,18 @@ impl MenuBar {
 
     /// The pointer reached the top edge or left the bar.
     pub fn hover(&mut self, gfx: &Gfx, inside: bool) -> Result<()> {
-        if self.slider_drag.is_some() && !inside {
+        if !inside
+            && (self.slider_drag.is_some()
+                || matches!(
+                    self.panel,
+                    Some(
+                        Island::ControlCenter
+                            | Island::Notifications
+                            | Island::NotificationBanner
+                            | Island::SystemMenu
+                    )
+                ))
+        {
             return Ok(());
         }
         if !inside && matches!(self.panel, Some(Island::Music | Island::Usage)) {
@@ -1876,6 +1888,7 @@ impl MenuBar {
 
     pub fn dismiss_island(&mut self, gfx: &Gfx) -> Result<()> {
         self.release_volume(None)?;
+        self.brightness_target = None;
         // SAFETY: Cancels our own one-shot banner timer if active.
         unsafe {
             let _ = KillTimer(Some(self.hwnd), NOTIFICATION_BANNER_TIMER);
@@ -2033,10 +2046,10 @@ impl MenuBar {
     pub fn tick(&mut self, gfx: &Gfx) -> Result<()> {
         self.update_status();
         self.watch_network();
-        if self.widgets.native_notifications
-            && let Some(watcher) = &self.notification_watcher
+        if self.panel == Some(Island::ControlCenter)
+            && let Some(cc) = &self.control_center
         {
-            watcher.refresh();
+            cc.refresh();
         }
         let audio_changed = self
             .audio
@@ -2103,6 +2116,9 @@ impl MenuBar {
             .as_ref()
             .map(control_center::Controller::snapshot)
             .unwrap_or_default();
+        if self.slider_drag.is_none() && cc_state.brightness.is_some() {
+            self.brightness_target = None;
+        }
         let Some(mut look) = self.look.clone() else {
             return self.refresh(gfx);
         };
@@ -2210,6 +2226,10 @@ impl MenuBar {
             );
         }
         look.status.bluetooth_on = on;
+        look.control_center.bluetooth_on = on;
+        if let Some(cc) = &self.control_center {
+            cc.refresh();
+        }
         look.notifications = self.notifications.snapshot();
         look.panel = self.panel;
         self.apply_look(gfx, look)
@@ -2913,14 +2933,45 @@ impl MenuBar {
 
         self.zones.clear();
         let mut left_end = px(SIDE_MARGIN);
-        let sys_logo = gfx.glyph_brush(&[(glyph::SYSTEM_LOGO, 0.95)], scale, ink)?;
+        let logo_side = px(15.0);
+        let light_ink = matches!(ink, Ink::Light);
+        let logo_brush = match &self.logo_brush {
+            Some((cached_light, brush)) if *cached_light == light_ink => Some(brush.clone()),
+            _ => {
+                let bytes: &[u8] = if light_ink {
+                    include_bytes!("../../../assets/brand/nosih-menubar-light.png")
+                } else {
+                    include_bytes!("../../../assets/brand/nosih-menubar-dark.png")
+                };
+                let brush = nosih_shell::imagery::decode(bytes, 32, 65_536)
+                    .map(|image| {
+                        let surface = gfx.image_surface(&image)?;
+                        Ok::<_, anyhow::Error>(
+                            gfx.compositor.CreateSurfaceBrushWithSurface(&surface)?,
+                        )
+                    })
+                    .transpose()?;
+                self.logo_brush = brush.clone().map(|b| (light_ink, b));
+                brush
+            }
+        };
         let sys_logo_zone = (
             (left_end - px(HIT_SLOP)).max(0.0),
-            left_end + sys_logo.width + px(HIT_SLOP),
+            left_end + logo_side + px(HIT_SLOP),
             Action::SystemMenu,
         );
-        place(&layers, &sys_logo, left_end)?;
-        left_end += sys_logo.width + px(12.0);
+        if let Some(brush) = &logo_brush {
+            add_visual(
+                c,
+                &layers,
+                &brush.cast()?,
+                left_end,
+                (height - logo_side) / 2.0,
+                logo_side,
+                logo_side,
+            )?;
+        }
+        left_end += logo_side + px(12.0);
         if !look.app_name.is_empty() {
             let name = gfx.text_brush_fitted(
                 &look.app_name,
@@ -3389,7 +3440,11 @@ impl MenuBar {
             };
             let geometry = IslandGeometry::new(self.panel_span, bar_height + px(PANEL_GAP), look);
             let height = px(look.panel_height());
-            let theme = Theme::for_popup(look.light, look.glass);
+            let theme = Theme::for_popup_look(appearance::Look {
+            material: look.material,
+            light: look.light,
+            glass: look.glass,
+        });
             let content = popup_surface(gfx, theme, layers, geometry, height, px(PANEL_RADIUS))?;
             match kind {
                 Island::Music => {
@@ -3444,7 +3499,11 @@ impl MenuBar {
         };
         let geometry = IslandGeometry::new(self.panel_span, bar_height + px(PANEL_GAP), look);
         let height = px(SYSTEM_MENU_HEIGHT);
-        let theme = Theme::for_popup(look.light, look.glass);
+        let theme = Theme::for_popup_look(appearance::Look {
+            material: look.material,
+            light: look.light,
+            glass: look.glass,
+        });
         let content = popup_surface(gfx, theme, layers, geometry, height, px(14.0))?;
         let c = &gfx.compositor;
         let ink = geometry.ink();
@@ -3549,7 +3608,11 @@ impl MenuBar {
         };
         let geometry = IslandGeometry::new(self.panel_span, bar_height + px(PANEL_GAP), look);
         let height = px(NOTIFICATION_BANNER_HEIGHT);
-        let theme = Theme::for_popup(look.light, look.glass);
+        let theme = Theme::for_popup_look(appearance::Look {
+            material: look.material,
+            light: look.light,
+            glass: look.glass,
+        });
         let content = popup_surface(gfx, theme, layers, geometry, height, px(PANEL_RADIUS))?;
         let c = &gfx.compositor;
         let ink = geometry.ink();
@@ -3677,7 +3740,11 @@ impl MenuBar {
         };
         let geometry = IslandGeometry::new(self.panel_span, bar_height + px(PANEL_GAP), look);
         let height = px(look.panel_height());
-        let theme = Theme::for_popup(look.light, look.glass);
+        let theme = Theme::for_popup_look(appearance::Look {
+            material: look.material,
+            light: look.light,
+            glass: look.glass,
+        });
         let content = popup_surface(gfx, theme, layers, geometry, height, px(PANEL_RADIUS))?;
         let c = &gfx.compositor;
         let ink = geometry.ink();
@@ -4061,7 +4128,11 @@ impl MenuBar {
         };
         let geometry = IslandGeometry::new(self.panel_span, bar_height + px(PANEL_GAP), look);
         let height = px(look.panel_height());
-        let theme = Theme::for_popup(look.light, look.glass);
+        let theme = Theme::for_popup_look(appearance::Look {
+            material: look.material,
+            light: look.light,
+            glass: look.glass,
+        });
         let content = popup_surface(gfx, theme, layers, geometry, height, px(PANEL_RADIUS))?;
         let c = &gfx.compositor;
         let ink = geometry.ink();
@@ -4114,7 +4185,14 @@ impl MenuBar {
             Some(card_border),
         )?;
 
-        let wifi_on = cc.wifi_on || matches!(look.status.network, Network::Wifi { .. });
+        let (wifi_on, bt_on) = if self.control_center.is_some() {
+            (cc.wifi_on, cc.bluetooth_on)
+        } else {
+            (
+                matches!(look.status.network, Network::Wifi { .. }),
+                look.status.bluetooth_on,
+            )
+        };
         let wifi_sub = if let Some(name) = &cc.wifi_name {
             name.as_str()
         } else if matches!(look.status.network, Network::Ethernet) {
@@ -4124,7 +4202,6 @@ impl MenuBar {
         } else {
             t.cc_off
         };
-        let bt_on = look.status.bluetooth_on || cc.bluetooth_on;
         let bt_sub = if bt_on { t.cc_on } else { t.cc_off };
 
         let row_h = row1_h / 2.0;
@@ -5556,7 +5633,6 @@ impl MenuBar {
             nosih_shell::log::line(&format!("ajustar brillo: {error:#}"));
         }
         self.volume_target = None;
-        self.brightness_target = None;
         Ok(true)
     }
 }

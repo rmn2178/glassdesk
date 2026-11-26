@@ -63,6 +63,23 @@ jobs:
           $setup = Get-ChildItem target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
           if (-not $setup) { throw 'NSIS installer was not produced' }
           Copy-Item $setup.FullName release-assets/Nosih-Setup.exe -Force
+          $sig = Get-ChildItem target/release/bundle/nsis/*-setup.exe.sig -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($sig) {
+            Copy-Item $sig.FullName release-assets/Nosih-Setup.exe.sig -Force
+            $version = (Get-Content apps/settings/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+            $manifest = [ordered]@{
+              version   = $version
+              notes     = "Nosih v$version"
+              pub_date  = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+              platforms = [ordered]@{
+                "windows-x86_64" = [ordered]@{
+                  signature = (Get-Content $sig.FullName -Raw).Trim()
+                  url       = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/v$version/Nosih-Setup.exe"
+                }
+              }
+            }
+            $manifest | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 release-assets/latest.json
+          }
           Get-FileHash release-assets/* -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash.ToLowerInvariant())  $(Split-Path -Leaf $_.Path)" } |
             Set-Content -Encoding utf8 release-assets/SHA256SUMS.txt
@@ -80,8 +97,4 @@ jobs:
         with:
           draft: true
           generate_release_notes: true
-          files: |
-            release-assets/Nosih-Setup.exe
-            release-assets/nosih.exe
-            release-assets/nosih-settings.exe
-            release-assets/SHA256SUMS.txt
+          files: release-assets/*

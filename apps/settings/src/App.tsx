@@ -248,7 +248,7 @@ export function App() {
       .catch(() => setFailed(true));
   }, [confirmingReset, update]);
 
-  const appearance = config?.appearance ?? "auto";
+  const appearance = config?.appearance ?? "liquidGlass";
   useEffect(() => {
     getCurrentWindow().setTheme(windowTheme(appearance)).catch(() => { });
   }, [appearance]);
@@ -375,7 +375,7 @@ export function App() {
                 <VisualChoices<Appearance>
                   label={ownMenuBarTheme ? t.themeDock : t.theme}
                   columns={3}
-                  value={config.appearance ?? "auto"}
+                  value={config.appearance ?? "liquidGlass"}
                   options={themeChoices}
                   onChange={(appearance) => update({ appearance })}
                 />
@@ -386,7 +386,7 @@ export function App() {
                     checked={!ownMenuBarTheme}
                     // Turning it off starts from the dock's theme, so nothing
                     // changes on screen until another theme is chosen.
-                    onChange={(same) => update({ menuBarAppearance: same ? null : config.appearance ?? "auto" })}
+                    onChange={(same) => update({ menuBarAppearance: same ? null : config.appearance ?? "liquidGlass" })}
                   />
                 </Row>
                 <SubRow label={t.menuBarTheme} stacked open={ownMenuBarTheme}>
@@ -394,7 +394,7 @@ export function App() {
                     label={t.menuBarTheme}
                     hideLabel
                     columns={3}
-                    value={config.menuBarAppearance ?? config.appearance ?? "auto"}
+                    value={config.menuBarAppearance ?? config.appearance ?? "liquidGlass"}
                     options={themeChoices}
                     onChange={(menuBarAppearance) => update({ menuBarAppearance })}
                   />

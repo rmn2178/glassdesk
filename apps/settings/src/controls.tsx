@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import { useId, type CSSProperties, type ReactNode } from "react";
 
 interface CardProps {
   /** Heading above the group, as macOS System Settings labels its groups. */
@@ -105,7 +105,7 @@ export function Slider({ value, min, max, label, unit = "px", disabled, onChange
         value={value}
         aria-valuetext={`${value} ${unit}`}
         disabled={disabled}
-        style={{ "--filled": `${filled}%` } as React.CSSProperties}
+        style={{ "--filled": `${filled}%` } as CSSProperties}
         onChange={(event) => onChange(Number(event.target.value))}
       />
       <output className="slider-value" aria-hidden="true">{value} {unit}</output>

@@ -42,7 +42,7 @@ pub struct Look {
     pub glass: bool,
 }
 
-static CHOICE: AtomicU8 = AtomicU8::new(Appearance::Auto as u8);
+static CHOICE: AtomicU8 = AtomicU8::new(Appearance::LiquidGlass as u8);
 /// The menu bar's own theme, or `SAME` for the dock's.
 static MENU_BAR_CHOICE: AtomicU8 = AtomicU8::new(SAME);
 /// Stored for "the menu bar takes the dock's theme": no theme has this value.

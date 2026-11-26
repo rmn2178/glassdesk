@@ -6,8 +6,8 @@
       "nsis"
     ],
     "publisher": "Nosih",
-    "homepage": "https://github.com/crafter-station/Nosih",
-    "shortDescription": "Dock estilo macOS para Windows",
+    "homepage": "https://github.com/nosih-app/nosih",
+    "shortDescription": "macOS-style Dock for Windows",
     "category": "Utility",
     "externalBin": [
       "binaries/nosih"

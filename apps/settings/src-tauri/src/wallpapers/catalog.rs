@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 pub(super) const MAX_BYTES: u64 = 32 * 1024 * 1024;
 pub(super) const ORIGIN: &str =
-    "https://raw.githubusercontent.com/crafter-station/Muelle/main/apps/settings/wallpapers";
+    "https://raw.githubusercontent.com/nosih-app/nosih/main/apps/settings/wallpapers";
 
 #[derive(Deserialize)]
 pub(super) struct Wallpaper {

@@ -143,7 +143,7 @@ pub struct Config {
     pub auto_update: bool,
     pub language: Language,
     /// The look of the dock, the menu bar and their menus and panels.
-    /// `Auto` (the default) follows Windows' light or dark mode.
+    /// `LiquidGlass` (the default) adapts to Windows' light or dark mode with refracted glass.
     pub appearance: Appearance,
     /// A theme of its own for the menu bar and its menus and panels (issue
     /// #54). `None`, the default, gives it the dock's `appearance`.
@@ -402,7 +402,7 @@ impl Default for Config {
             check_updates: true,
             auto_update: true,
             language: Language::Auto,
-            appearance: Appearance::Auto,
+            appearance: Appearance::LiquidGlass,
             menu_bar_appearance: None,
             shortcuts_folder: None,
         }
@@ -1081,10 +1081,10 @@ mod tests {
     #[test]
     fn the_appearance_follows_windows_unless_chosen() {
         // Files from before the setting, and themes from newer versions.
-        for json in [r#"{}"#, r#"{"appearance":"sepia"}"#] {
-            let config: Config = serde_json::from_str(json).unwrap_or_default();
-            assert_eq!(config.appearance, Appearance::Auto);
-        }
+        let missing: Config = serde_json::from_str(r#"{}"#).unwrap_or_default();
+        assert_eq!(missing.appearance, Appearance::LiquidGlass);
+        let unknown: Config = serde_json::from_str(r#"{"appearance":"sepia"}"#).unwrap_or_default();
+        assert_eq!(unknown.appearance, Appearance::Auto);
         let frosted: Config =
             serde_json::from_str(r#"{"appearance":"frosted"}"#).unwrap_or_default();
         assert_eq!(frosted.appearance, Appearance::Frosted);

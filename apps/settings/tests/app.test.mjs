@@ -33,7 +33,7 @@ const base = {
   showTrash: true, pinExplorer: true,
   showDownloads: true,
   showOtherWorkspaces: false,
-  menuBarIslandStyle: "notch", checkUpdates: false, appearance: "auto",
+  menuBarIslandStyle: "notch", checkUpdates: false, appearance: "liquidGlass",
   pinned: [], recent: [], shortcutsFolder: null,
 };
 const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
@@ -503,7 +503,7 @@ test("the theme picker offers every theme with a preview, saves only the choice 
     const picker = [...elements(view.body())].find((node) => node.props.label === texts[language].theme);
     assert.deepEqual(picker.props.options.map((option) => option.value), themes);
     assert.ok(picker.props.options.every((option) => option.preview && option.label));
-    assert.equal(picker.props.value, "auto");
+    assert.equal(picker.props.value, "liquidGlass");
   }
   const view = fixture("appearance");
   const unmount = await view.mount();
@@ -513,10 +513,10 @@ test("the theme picker offers every theme with a preview, saves only the choice 
     view.fire(60);
     await settle();
     assert.deepEqual(view.calls, [{ appearance: "frosted" }]);
-    // An old file without the setting reads as automatic.
+    // An old file without the setting reads as liquidGlass.
     const old = fixture("appearance", { appearance: undefined });
     const picker = [...elements(old.body())].find((node) => node.props.label === texts.en.theme);
-    assert.equal(picker.props.value, "auto");
+    assert.equal(picker.props.value, "liquidGlass");
   } finally { unmount(); }
 });
 
