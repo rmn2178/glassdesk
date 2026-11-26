@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.locale.1.10.0.schema.json
+PackageIdentifier: CrafterStation.Nosih
+PackageVersion: 0.1.5
+PackageLocale: es-MX
+ShortDescription: El Dock de macOS, hecho para Windows 11.
+Description: Nosih reemplaza la barra de tareas de Windows 11 por un dock de cristal al estilo de macOS, con iconos que crecen bajo el cursor, ventanas minimizadas como miniaturas en vivo y una barra superior opcional. Al salir o desinstalarlo vuelve la barra de tareas de Windows.
+ManifestType: locale
+ManifestVersion: 1.10.0

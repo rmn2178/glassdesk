@@ -1,0 +1,84 @@
+name: CI & Build Nosih
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: apps/settings/pnpm-lock.yaml
+
+      - name: Setup Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      # The Tauri settings binary embeds apps/settings/dist at compile time.
+      - name: Build and test Settings UI
+        working-directory: apps/settings
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm build
+
+      - name: Lint workspace with Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run Rust workspace tests
+        run: cargo test --workspace
+
+      - name: Build release binaries and NSIS installer
+        shell: pwsh
+        run: ./scripts/build-installer.ps1
+
+      - name: Stage release artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist-artifacts | Out-Null
+          Copy-Item target/release/nosih.exe dist-artifacts/nosih.exe -Force
+          Copy-Item target/release/nosih-settings.exe dist-artifacts/nosih-settings.exe -Force
+          $setup = Get-ChildItem target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          if ($setup) {
+            Copy-Item $setup.FullName dist-artifacts/Nosih-Setup.exe -Force
+          }
+          Get-FileHash dist-artifacts/* -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLowerInvariant())  $(Split-Path -Leaf $_.Path)" } |
+            Set-Content -Encoding utf8 dist-artifacts/SHA256SUMS.txt
+          Get-ChildItem dist-artifacts | Format-Table Name, Length -AutoSize
+
+      - name: Upload Nosih Windows x64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nosih-windows-x64
+          path: dist-artifacts/
+          retention-days: 14

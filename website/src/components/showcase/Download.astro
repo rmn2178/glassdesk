@@ -1,0 +1,70 @@
+---
+import { Image } from "astro:assets";
+import appIcon from "@/assets/brand/muelle-app.webp";
+import Crab from "@/components/crab/Crab.astro";
+import Section from "@/components/layout/Section.astro";
+import Button from "@/components/ui/Button.astro";
+import Icon from "@/components/ui/Icon.astro";
+import { download } from "@/data/showcase";
+import { signingCredit } from "@/data/policies";
+import { site } from "@/data/site";
+import "@/styles/showcase.css";
+---
+
+<Section id="download" class="pb-10">
+  <div class="get" data-r>
+    <span class="get-perch">
+      <Image src={appIcon} alt="" class="get-icon" width={160} height={160} />
+      <Crab cell={2.5} class="get-crab" interactive label="The crab, waiting for you. Click it." data-download-crab />
+    </span>
+    <h2 class="get-name">{download.name}</h2>
+    <p class="get-tagline">{download.tagline}</p>
+
+    <ul class="get-meta" aria-label="About this download">
+      {download.meta.map((item) => <li>{item}</li>)}
+    </ul>
+
+    <div class="get-actions">
+      <Button href={site.download}>
+        {download.cta}
+        <Icon name="arrow-right" size={18} />
+      </Button>
+      <a class="get-link" href={site.releases} target="_blank" rel="noopener noreferrer">
+        {download.releases}
+        <Icon name="arrow-up-right" size={14} />
+      </a>
+    </div>
+  </div>
+
+  <ol class="get-steps">
+    {
+      download.steps.map(({ title, body }) => (
+        <li data-r>
+          <b>{title}</b>
+          <span>{body}</span>
+        </li>
+      ))
+    }
+  </ol>
+
+  <p class="get-signing" data-r>
+    {signingCredit} <a href="/code-signing-policy">Code signing policy</a> · <a href="/privacy">Privacy</a>
+  </p>
+
+  <details class="get-source" data-r>
+    <summary>{download.source.summary}</summary>
+    <p>{download.source.note}</p>
+    <pre><code>{download.source.commands.map((line) => `> ${line}`).join("\n")}</code></pre>
+  </details>
+</Section>
+
+<script>
+  import { initDownloadCrab } from "@/scripts/crab-spots";
+  import { initReveal } from "@/scripts/reveal";
+
+  const section = document.querySelector<HTMLElement>("#download");
+  if (section) {
+    initReveal(section);
+    initDownloadCrab(section);
+  }
+</script>

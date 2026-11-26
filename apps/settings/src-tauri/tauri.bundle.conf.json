@@ -1,0 +1,31 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "publisher": "Nosih",
+    "homepage": "https://github.com/crafter-station/Nosih",
+    "shortDescription": "Dock estilo macOS para Windows",
+    "category": "Utility",
+    "externalBin": [
+      "binaries/nosih"
+    ],
+    "windows": {
+      "nsis": {
+        "template": "installer/installer.nsi",
+        "installerHooks": "installer/hooks.nsh",
+        "installMode": "currentUser",
+        "languages": [
+          "English",
+          "Spanish",
+          "French"
+        ],
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico"
+      }
+    },
+    "createUpdaterArtifacts": true
+  }
+}

@@ -1,0 +1,79 @@
+---
+import { Image } from "astro:assets";
+import Section from "@/components/layout/Section.astro";
+import SectionIntro from "@/components/showcase/SectionIntro.astro";
+import { type AnatomyGroup, anatomy, anatomyIntro } from "@/data/showcase";
+import "@/styles/showcase.css";
+
+/* Columns of the grid: one per group, plus one for each divider. */
+const columns: (AnatomyGroup | "divider")[] = anatomy.flatMap((group) =>
+  group.divider ? ["divider" as const, group] : [group],
+);
+---
+
+<Section id="dock">
+  <SectionIntro {...anatomyIntro} />
+
+  <div class="anatomy-scroll" data-r>
+    <div class="anatomy" style={`--columns: ${columns.length}`}>
+      <div class="anatomy-glass" aria-hidden="true"></div>
+      {
+        columns.map((column, index) =>
+          column === "divider" ? (
+            <div class="anatomy-divider" style={`grid-column: ${index + 1}`} aria-hidden="true" />
+          ) : (
+            <>
+              <figure class="anatomy-tiles" style={`grid-column: ${index + 1}`}>
+                {column.tiles.map((tile) =>
+                  tile.kind === "app" ? (
+                    <span class="anatomy-tile">
+                      <Image src={tile.icon} alt={tile.label} width={128} height={128} />
+                      {tile.open && <i class="anatomy-dot" aria-hidden="true" />}
+                    </span>
+                  ) : tile.kind === "start" ? (
+                    <span class="anatomy-tile anatomy-start" role="img" aria-label="Start">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="2" y="2" width="9.5" height="9.5" rx="1.2" />
+                        <rect x="12.5" y="2" width="9.5" height="9.5" rx="1.2" />
+                        <rect x="2" y="12.5" width="9.5" height="9.5" rx="1.2" />
+                        <rect x="12.5" y="12.5" width="9.5" height="9.5" rx="1.2" />
+                      </svg>
+                    </span>
+                  ) : (
+                    <span class="anatomy-tile anatomy-window" role="img" aria-label="Minimized window">
+                      <span class="anatomy-window-bar">
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                      <span class="anatomy-window-line" />
+                      <span class="anatomy-window-line short" />
+                      <span class="anatomy-window-line" />
+                    </span>
+                  ),
+                )}
+              </figure>
+              <p
+                class:list={["anatomy-label", column.side === "top" ? "is-top" : "is-bottom"]}
+                style={`grid-column: ${index + 1}`}
+              >
+                <span class="anatomy-text">
+                  <b>{column.label}</b>
+                  <span>{column.detail}</span>
+                </span>
+                <span class="anatomy-bracket" aria-hidden="true" />
+              </p>
+            </>
+          ),
+        )
+      }
+    </div>
+  </div>
+</Section>
+
+<script>
+  import { initReveal } from "@/scripts/reveal";
+
+  const section = document.querySelector<HTMLElement>("#dock");
+  if (section) initReveal(section);
+</script>

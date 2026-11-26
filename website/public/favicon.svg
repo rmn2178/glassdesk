@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#be96fc"/>
+      <stop offset=".3" stop-color="#7c4ee2"/>
+      <stop offset=".52" stop-color="#6e3cc4"/>
+      <stop offset=".76" stop-color="#ee6234"/>
+      <stop offset="1" stop-color="#ff9628"/>
+    </linearGradient>
+    <linearGradient id="glass" x1=".5" y1="0" x2=".5" y2="1">
+      <stop stop-color="#fff" stop-opacity=".85"/>
+      <stop offset="1" stop-color="#fff" stop-opacity=".62"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="88" height="88" rx="25" fill="url(#tile)"/>
+  <path d="M50 76C37 61 34 37 50 21c16 16 13 40 0 55Z" fill="#fff" fill-opacity=".08" stroke="url(#glass)" stroke-width="1.8"/>
+  <path d="M50 76C36 69 20 55 18 39c15-2 28 11 32 37Z" fill="#fff" fill-opacity=".07" stroke="url(#glass)" stroke-width="1.6"/>
+  <path d="M50 76c14-7 30-21 32-37-15-2-28 11-32 37Z" fill="#fff" fill-opacity=".07" stroke="url(#glass)" stroke-width="1.6"/>
+</svg>

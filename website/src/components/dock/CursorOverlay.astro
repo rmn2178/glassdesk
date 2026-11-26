@@ -1,0 +1,89 @@
+---
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<span
+  class:list={[
+    "pointer-events-none absolute z-10 flex items-start gap-1.5 transition-opacity duration-[250ms]",
+    className,
+  ]}
+  aria-hidden="true"
+  data-cursor
+>
+  <svg viewBox="0 0 24 24" class="cursor-icon size-[22px] drop-shadow-[0_2px_3px_rgba(0,0,0,0.45)]">
+    <defs>
+      <linearGradient id="cursor-primary-gradient" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stop-color="#f97c03" />
+        <stop offset="100%" stop-color="#f9cd5a" />
+      </linearGradient>
+    </defs>
+    <path
+      fill="url(#cursor-primary-gradient)"
+      d="M7.13 17.25L3.33 5.82c-.54-1.63-.8-2.45-.38-2.89c.44-.43 1.26-.17 2.9.36l11.47 3.69c1.64.53 2.46.8 2.6 1.32a1 1 0 0 1 .03.34c-.04.55-.81.95-2.34 1.75c-.94.5-1.4.74-1.53 1.14l-.04.27c0 .42.37.8 1.12 1.55l3.33 3.33c.67.67 1 1 1 1.42c0 .4-.33.74-1 1.4l-.9.91c-.67.67-1 1-1.42 1s-.74-.33-1.41-1l-3.35-3.35c-.72-.73-1.09-1.1-1.5-1.1a1 1 0 0 0-.32.05c-.39.13-.62.59-1.1 1.5c-.76 1.48-1.14 2.22-1.67 2.28a1 1 0 0 1-.4-.03c-.5-.14-.76-.93-1.29-2.51"
+    />
+    <path
+      fill="none"
+      stroke="#fff"
+      stroke-width="1.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="M7.13 17.25L3.33 5.82c-.54-1.63-.8-2.45-.38-2.89c.44-.43 1.26-.17 2.9.36l11.47 3.69c1.64.53 2.46.8 2.6 1.32a1 1 0 0 1 .03.34c-.04.55-.81.95-2.34 1.75c-.94.5-1.4.74-1.53 1.14l-.04.27c0 .42.37.8 1.12 1.55l3.33 3.33c.67.67 1 1 1 1.42c0 .4-.33.74-1 1.4l-.9.91c-.67.67-1 1-1.42 1s-.74-.33-1.41-1l-3.35-3.35c-.72-.73-1.09-1.1-1.5-1.1a1 1 0 0 0-.32.05c-.39.13-.62.59-1.1 1.5c-.76 1.48-1.14 2.22-1.67 2.28a1 1 0 0 1-.4-.03c-.5-.14-.76-.93-1.29-2.51"
+    />
+  </svg>
+  <b class="mt-4 squircle-xs bg-primary-gradient px-1.5 py-0.5 text-[11px] text-ink">demo</b>
+  <i class="cursor-ripple" data-cursor-ripple></i>
+</span>
+
+<style>
+  /* The tip squashes and a ring expands on every press, as in the original. */
+  .cursor-icon {
+    transform-origin: 3px 3px;
+  }
+
+  .cursor-icon.is-pressing {
+    animation: cursor-press 0.2s ease-out;
+  }
+
+  .cursor-ripple {
+    position: absolute;
+    top: -6px;
+    left: -6px;
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid var(--color-primary);
+    border-radius: 50%;
+    opacity: 0;
+  }
+
+  .cursor-ripple.is-rippling {
+    animation: cursor-ripple 0.55s ease-out;
+  }
+
+  @keyframes cursor-press {
+    50% {
+      scale: 0.8;
+    }
+  }
+
+  @keyframes cursor-ripple {
+    from {
+      scale: 0.3;
+      opacity: 0.8;
+    }
+    to {
+      scale: 2.4;
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cursor-icon.is-pressing,
+    .cursor-ripple.is-rippling {
+      animation: none;
+    }
+  }
+</style>

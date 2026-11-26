@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+PackageIdentifier: CrafterStation.Nosih
+PackageVersion: '{{VERSION}}'
+MinimumOSVersion: 10.0.19045.0
+InstallerType: nullsoft
+Scope: user
+InstallModes:
+  - interactive
+  - silent
+  - silentWithProgress
+InstallerSwitches:
+  Silent: /S
+  # /P can open Settings after the first install; use NSIS silent mode for
+  # unattended package-manager installs in both modes.
+  SilentWithProgress: /S
+Dependencies:
+  PackageDependencies:
+    - PackageIdentifier: Microsoft.VCRedist.2015+.x64
+    - PackageIdentifier: Microsoft.EdgeWebView2Runtime
+UpgradeBehavior: install
+ProductCode: Nosih
+ReleaseDate: {{RELEASE_DATE}}
+AppsAndFeaturesEntries:
+  - DisplayName: Nosih
+    Publisher: Nosih
+    DisplayVersion: '{{VERSION}}'
+    ProductCode: Nosih
+Installers:
+  - Architecture: x64
+    InstallerUrl: {{INSTALLER_URL}}
+    InstallerSha256: {{INSTALLER_SHA256}}
+ManifestType: installer
+ManifestVersion: 1.10.0

@@ -1,0 +1,181 @@
+/* The pixel crab. Sizes are in cells (`--cell`), so it stays crisp. */
+
+.crab {
+  --w-cells: 22;
+  --h-cells: 15;
+  position: relative;
+  display: block;
+  width: calc(var(--w-cells) * var(--cell));
+  height: calc(var(--h-cells) * var(--cell));
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.crab-interactive {
+  cursor: pointer;
+}
+
+.crab-interactive:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 6px;
+  border-radius: 6px;
+}
+
+.crab-pop,
+.crab-hop {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 100%;
+}
+
+.crab-sprite {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 calc(var(--cell) * 0.8) calc(var(--cell) * 0.7) rgb(0 0 0 / 0.28));
+}
+
+/* Faces: only the current one shows. */
+.crab-face {
+  display: none;
+}
+
+.crab[data-face="neutral"] [data-face-marks="neutral"],
+.crab[data-face="happy"] [data-face-marks="happy"],
+.crab[data-face="love"] [data-face-marks="love"],
+.crab[data-face="sad"] [data-face-marks="sad"],
+.crab[data-face="sleep"] [data-face-marks="sleep"] {
+  display: inline;
+}
+
+/* Legs: standing, and mid-step at 8 fps while walking (pixel art steps). */
+.crab-legs-1 {
+  visibility: hidden;
+}
+
+.crab.is-walking .crab-legs-0 {
+  animation: crab-step-a 0.25s step-end infinite;
+}
+
+.crab.is-walking .crab-legs-1 {
+  animation: crab-step-b 0.25s step-end infinite;
+}
+
+@keyframes crab-step-a {
+  0% {
+    visibility: visible;
+  }
+  50% {
+    visibility: hidden;
+  }
+}
+
+@keyframes crab-step-b {
+  0% {
+    visibility: hidden;
+  }
+  50% {
+    visibility: visible;
+  }
+}
+
+/* Emotes float a cell above the crab and pop in. */
+.crab-emote,
+.crab-poke {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + var(--cell));
+  width: calc(var(--w) * var(--cell));
+  height: calc(var(--h) * var(--cell));
+  margin-left: calc(var(--w) * var(--cell) / -2);
+  overflow: visible;
+  pointer-events: none;
+  transform-origin: 50% 100%;
+}
+
+.crab-emote {
+  scale: 0;
+  opacity: 0;
+  transition:
+    scale 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.18s ease;
+}
+
+.crab[data-emote="heart"] [data-emote-sprite="heart"],
+.crab[data-emote="drop"] [data-emote-sprite="drop"],
+.crab[data-emote="sleep"] [data-emote-sprite="sleep"] {
+  scale: 1;
+  opacity: 1;
+}
+
+/* The "zzz" drifts up while it shows, as a sleeper's does. */
+.crab[data-emote="sleep"] [data-emote-sprite="sleep"] {
+  animation: crab-zzz 1.6s ease-in-out infinite;
+}
+
+@keyframes crab-zzz {
+  50% {
+    translate: calc(var(--cell) * 1) calc(var(--cell) * -1.5);
+  }
+}
+
+.crab-poke {
+  opacity: 0;
+}
+
+/* Hint over an interactive crab, in the dock's tooltip style. */
+.crab-tip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + var(--cell) * 9);
+  padding: 4px 10px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 8px;
+  corner-shape: squircle;
+  background: rgb(20 22 24 / 0.82);
+  backdrop-filter: blur(12px);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  translate: -50% 4px;
+  transition:
+    opacity 0.15s,
+    translate 0.15s;
+}
+
+.crab-interactive:hover .crab-tip,
+.crab-interactive:focus-visible .crab-tip,
+.crab.is-hinting .crab-tip {
+  opacity: 1;
+  translate: -50% 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crab.is-walking .crab-legs-0,
+  .crab.is-walking .crab-legs-1,
+  .crab[data-emote="sleep"] [data-emote-sprite="sleep"] {
+    animation: none;
+  }
+
+  .crab-emote {
+    transition: opacity 0.2s ease;
+    scale: 1;
+  }
+}
+
+/* A crab placed by script (`Crab.place`) inside a positioned stage. */
+.crab-free {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 6;
+}

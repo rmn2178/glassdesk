@@ -1,0 +1,29 @@
+---
+import SiteFooter from "@/components/layout/SiteFooter.astro";
+import SiteHeader from "@/components/layout/SiteHeader.astro";
+import Hero from "@/components/sections/Hero.astro";
+import AiUsage from "@/components/showcase/AiUsage.astro";
+import Customize from "@/components/showcase/Customize.astro";
+import DockAnatomy from "@/components/showcase/DockAnatomy.astro";
+import Download from "@/components/showcase/Download.astro";
+import Mascot from "@/components/showcase/Mascot.astro";
+import Reversible from "@/components/showcase/Reversible.astro";
+import { site } from "@/data/site";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="Muelle — Free macOS-Style Dock for Windows" description={site.description}>
+  <SiteHeader />
+
+  <main id="main">
+    <Hero />
+    <DockAnatomy />
+    <AiUsage />
+    <Mascot />
+    <Customize />
+    <Reversible />
+    <Download />
+  </main>
+
+  <SiteFooter />
+</BaseLayout>

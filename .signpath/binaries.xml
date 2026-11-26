@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration "binaries": the two programs inside the
+  installer, uploaded by .github/workflows/release.yml as one ZIP artifact.
+  Paste it in SignPath: Project > Artifact configurations > New, slug "binaries".
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="muelle.exe" product-name="Muelle">
+      <authenticode-sign />
+    </pe-file>
+    <pe-file path="muelle-settings.exe" product-name="Muelle">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

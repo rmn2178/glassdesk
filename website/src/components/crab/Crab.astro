@@ -1,0 +1,107 @@
+---
+/**
+ * The pixel crab of the app, drawn at build time as an SVG of cell runs:
+ * every face, both leg poses and the three emotes are in the markup, and
+ * `data-face` / `data-emote` choose what shows. `scripts/crab.ts` plays the
+ * acts. Without JavaScript it is a still, happy crab.
+ */
+import {
+  bodyRuns,
+  CRAB_HEIGHT,
+  CRAB_WIDTH,
+  emoteSprites,
+  faceRuns,
+  legRuns,
+} from "@/lib/crab-sprite";
+import type { CrabFace } from "@/data/crab";
+import "@/styles/crab.css";
+
+interface Props {
+  /** Pixels per cell. The app uses 2 (at 125 % scale). */
+  cell?: number;
+  face?: CrabFace;
+  /** Spoken name for assistive tech; decorative when empty. */
+  label?: string;
+  /** Interactive crabs can be clicked and reached with the keyboard. */
+  interactive?: boolean;
+  /** A short hint shown over the crab on hover (dock-tip style). */
+  tip?: string;
+  class?: string;
+  [key: `data-${string}`]: string | undefined;
+}
+
+const {
+  cell = 3,
+  face = "happy",
+  label = "",
+  interactive = false,
+  tip,
+  class: className,
+  ...rest
+} = Astro.props;
+const faces = Object.entries(faceRuns) as [CrabFace, typeof bodyRuns][];
+const emotes = Object.entries(emoteSprites);
+const Tag = interactive ? "button" : "div";
+---
+
+<Tag
+  class:list={["crab", interactive && "crab-interactive", className]}
+  style={`--cell: ${cell}px`}
+  data-crab
+  data-face={face}
+  type={interactive ? "button" : undefined}
+  aria-label={label || undefined}
+  aria-hidden={label ? undefined : "true"}
+  {...rest}
+>
+  <span class="crab-pop">
+    <span class="crab-hop">
+      {
+        emotes.map(([name, sprite]) => (
+          <svg
+            class="crab-emote"
+            data-emote-sprite={name}
+            viewBox={`0 0 ${sprite.width} ${sprite.height}`}
+            style={`--w: ${sprite.width}; --h: ${sprite.height}`}
+            shape-rendering="crispEdges"
+            aria-hidden="true"
+          >
+            {sprite.runs.map((r) => <rect x={r.x} y={r.y} width={r.w} height="1" fill={r.fill} />)}
+          </svg>
+        ))
+      }
+      <svg
+        class="crab-sprite"
+        viewBox={`0 0 ${CRAB_WIDTH} ${CRAB_HEIGHT}`}
+        shape-rendering="crispEdges"
+        aria-hidden="true"
+      >
+        <g>{bodyRuns.map((r) => <rect x={r.x} y={r.y} width={r.w} height="1" fill={r.fill} />)}</g>
+        {
+          legRuns.map((legs, index) => (
+            <g class={`crab-legs crab-legs-${index}`}>
+              {legs.map((r) => <rect x={r.x} y={r.y} width={r.w} height="1" fill={r.fill} />)}
+            </g>
+          ))
+        }
+        {
+          faces.map(([name, marks]) => (
+            <g class="crab-face" data-face-marks={name}>
+              {marks.map((r) => <rect x={r.x} y={r.y} width={r.w} height="1" fill={r.fill} />)}
+            </g>
+          ))
+        }
+      </svg>
+    </span>
+    <svg
+      class="crab-poke"
+      viewBox={`0 0 ${emoteSprites.heart.width} ${emoteSprites.heart.height}`}
+      style={`--w: ${emoteSprites.heart.width}; --h: ${emoteSprites.heart.height}`}
+      shape-rendering="crispEdges"
+      aria-hidden="true"
+    >
+      {emoteSprites.heart.runs.map((r) => <rect x={r.x} y={r.y} width={r.w} height="1" fill={r.fill} />)}
+    </svg>
+  </span>
+  {tip && <span class="crab-tip" aria-hidden="true">{tip}</span>}
+</Tag>

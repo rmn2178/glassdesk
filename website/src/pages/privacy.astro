@@ -1,0 +1,84 @@
+---
+import PolicyPage from "@/components/layout/PolicyPage.astro";
+import { updateManifest } from "@/data/policies";
+import { site } from "@/data/site";
+---
+
+<PolicyPage
+  title="Privacy policy"
+  description="Muelle has no accounts, analytics or telemetry. Its optional network requests check for updates and read AI provider usage."
+  updated="November 16, 2026"
+>
+  <p>
+    Muelle has no accounts, no analytics and no telemetry. It does not collect personal data and never sends anything
+    to the Muelle project. It makes only the two kinds of requests below, and both can be turned off in Settings.
+  </p>
+
+  <h2>1. Update check</h2>
+  <p>
+    When you open Settings, and once a day shortly after you turn on the computer, Muelle asks GitHub
+    whether a newer version exists by downloading{" "}
+    <code>{updateManifest}</code>. Nothing about you or your computer is sent with it; GitHub, like any website, sees
+    your IP address and handles it under the{" "}
+    <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">GitHub privacy statement</a>.
+    When there is one, its signed installer is downloaded from the same GitHub releases page and
+    installed: by itself if <b>Install updates automatically</b> is on, otherwise when you choose to.
+  </p>
+  <p>To turn it off: Settings → System → <b>Check for updates automatically</b> (or only <b>Install updates automatically</b>, to keep the notice in Settings). You can still check by hand.</p>
+
+  <h2>2. AI provider usage</h2>
+  <p>
+    The menu bar can show available plan limits for Claude Code, Codex,
+    OpenCode Go, Gemini CLI, or Antigravity. It checks usage only while a supported client is
+    running. Gemini Pro and Flash quotas are shown as separate model families when the provider
+    supplies them.
+  </p>
+  <ul>
+    <li>
+      It reads the sign-in that each command-line client already stores on your computer: Claude Code,
+      Codex, OpenCode, Gemini CLI or Antigravity. Muelle never decrypts other
+      apps' stored secrets or reads their databases, and does not save or change these credentials.
+    </li>
+    <li>
+      With that sign-in it asks the corresponding provider for available limits every five minutes while the indicator is visible, or when you press Refresh:
+      Anthropic, OpenAI, OpenCode, or Google. The sign-in only goes to its own provider.
+      Antigravity usage is read from its authenticated local service on <code>127.0.0.1</code>.
+      Percentages and reset times stay in memory and are shown in the menu bar.
+    </li>
+    <li>
+      For Codex it may instead read the latest limits that Codex itself writes at the end of its session files
+      (<code>.codex\sessions</code>), without contacting anyone. It reads only those figures.
+    </li>
+    <li>
+      Each provider handles its requests under its own policy, including{" "}
+      <a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noopener noreferrer">Anthropic privacy policy</a>,{" "}
+      <a href="https://openai.com/policies/privacy-policy/" target="_blank" rel="noopener noreferrer">OpenAI privacy policy</a>,{" "}
+      <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">GitHub privacy statement</a>, and{" "}
+      <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google privacy policy</a>.
+    </li>
+  </ul>
+  <p>To turn it off: Settings → Menu bar → <b>Show AI provider usage</b>.</p>
+
+  <h2>What stays on your computer</h2>
+  <ul>
+    <li><code>%APPDATA%\Muelle\config.json</code>: your settings and the apps you pinned.</li>
+    <li><code>%LOCALAPPDATA%\Muelle</code>: a cache of app icons and names, so the dock starts fast.</li>
+  </ul>
+  <p>
+    To show what is on screen (open windows, their icons, network and volume status, and whether an app is using the
+    microphone or camera, for the menu bar), Muelle asks Windows itself; none of it leaves your computer. Uninstalling removes the cache, and optionally your settings.
+  </p>
+
+  <h2>This website</h2>
+  <p>
+    The site is hosted on Vercel and uses no cookies, analytics or trackers. Vercel may keep standard server logs (such
+    as IP addresses) under the{" "}
+    <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer">Vercel privacy policy</a>.
+    Downloads come from <a href={site.releases} target="_blank" rel="noopener noreferrer">GitHub Releases</a>.
+  </p>
+
+  <h2>Questions</h2>
+  <p>
+    <a href={site.issues} target="_blank" rel="noopener noreferrer">Open an issue on GitHub</a>.
+  </p>
+</PolicyPage>

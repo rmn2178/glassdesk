@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="650" viewBox="0 0 1280 650" role="img" aria-label="Vista previa de la isla de uso de Claude y Codex en la barra superior de Muelle">
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1">
+      <stop stop-color="#9bb9db"/>
+      <stop offset=".47" stop-color="#ecc5bc"/>
+      <stop offset="1" stop-color="#f5d9ac"/>
+    </linearGradient>
+    <linearGradient id="glass" x2="0" y2="1">
+      <stop stop-color="#ffffff" stop-opacity=".58"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity=".24"/>
+    </linearGradient>
+    <filter id="shadow" x="-.5" y="-.5" width="2" height="2"><feGaussianBlur stdDeviation="14"/></filter>
+    <symbol id="claude" viewBox="0 0 128 128">
+      <path fill="#d97757" d="m25.144 85.096 25.159-14.118.421-1.23-.421-.68h-1.23l-4.21-.26-14.377-.388-12.466-.518-12.078-.648-3.044-.648-2.85-3.755.292-1.879 2.558-1.716 3.659.324 8.095.55 12.143.842 8.807.519 13.05 1.36h2.072l.292-.842-.713-.518-.55-.519-12.564-8.516-13.6-9.002-7.123-5.18-3.853-2.623-1.943-2.461-.842-5.375 3.497-3.853 4.695.323 1.198.324 4.76 3.659 10.168 7.869 13.276 9.779 1.943 1.619.777-.55.097-.39-.875-1.457-7.22-13.049-7.707-13.276-3.432-5.504-.907-3.304c-.323-1.36-.55-2.492-.55-3.885L33.53.712 35.73 0l5.311.713 2.235 1.942 3.302 7.545 5.343 11.884 8.29 16.158 2.428 4.792 1.295 4.436.486 1.36h.842v-.777l.68-9.099 1.263-11.172 1.23-14.377.421-4.047L70.864 4.5l3.983-2.623 3.109 1.49 2.558 3.658-.356 2.364-1.522 9.876-2.979 15.478-1.943 10.362h1.133l1.296-1.295 5.245-6.962 8.808-11.01 3.886-4.37 4.533-4.825 2.914-2.3h5.505l4.047 6.023-1.813 6.218-5.666 7.188-4.696 6.087-6.735 9.067-4.21 7.253.39.583 1.003-.097 15.219-3.238 8.224-1.49 9.811-1.683 4.437 2.072.485 2.105-1.748 4.306-10.491 2.59-12.305 2.461-18.328 4.34-.226.162.259.323 8.257.778 3.53.194h8.645l16.093 1.198 4.21 2.784 2.525 3.4-.421 2.59-6.476 3.304-8.743-2.073-20.4-4.857-6.993-1.749h-.972v.583l5.829 5.7 10.685 9.649 13.373 12.434.68 3.076-1.716 2.429-1.813-.26-11.754-8.84-4.534-3.982-10.264-8.646h-.68v.907l2.364 3.465 12.499 18.78.647 5.764-.906 1.878-3.238 1.133-3.562-.647-7.318-10.265-7.545-11.56-6.087-10.361-.745.421-3.595 38.694-1.683 1.975-3.886 1.49-3.238-2.46-1.716-3.984 1.716-7.868 2.072-10.265 1.684-8.16 1.522-10.135.906-3.368-.064-.226-.745.097-7.642 10.492-11.624 15.704-9.197 9.843-2.201.875-3.82-1.976.355-3.53 2.137-3.14 12.726-16.19 7.674-10.038 4.954-5.796-.033-.842h-.29L22.066 98.987l-6.023.777-2.59-2.429.324-3.982 1.23-1.296 10.168-6.994Z"/>
+    </symbol>
+    <symbol id="codex" viewBox="0 0 24 24">
+      <path fill="#f5f7fa" fill-rule="evenodd" d="M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.8.8 0 0 0-.856 0zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.43.43 0 0 1 .476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142a.45.45 0 0 1-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.48 4.48 0 0 1 4.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.43.43 0 0 1-.476 0m-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71a.79.79 0 0 0 .856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523m5.899 2.83a5.95 5.95 0 0 0 5.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947a5.7 5.7 0 0 0-1.88.31A5.96 5.96 0 0 0 10.205 0a5.95 5.95 0 0 0-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 0 0 4.162 1.713z"/>
+    </symbol>
+  </defs>
+  <rect width="1280" height="650" fill="#edf0f4"/>
+  <text x="80" y="51" fill="#282d38" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="28" font-weight="650">Muelle · Uso de IA</text>
+  <text x="80" y="78" fill="#707887" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="16">Vista de diseño · valores de ejemplo</text>
+
+  <rect x="80" y="105" width="1120" height="168" rx="23" fill="url(#sky)"/>
+  <path d="M80 128Q80 105 103 105H1177Q1200 105 1200 128V141H80Z" fill="url(#glass)"/>
+  <text x="100" y="129" fill="#26303b" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="13" font-weight="600">Explorador</text>
+  <text x="1102" y="129" fill="#26303b" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="13">18:25</text>
+  <rect x="470" y="106" width="340" height="52" rx="25" fill="#080a0e" opacity=".22" filter="url(#shadow)"/>
+  <path d="M470 105H810C798 105 798 115 798 124V133Q798 159 772 159H508Q482 159 482 133V124C482 115 482 105 470 105Z" fill="#080a0e"/>
+  <use href="#claude" x="496" y="118" width="27" height="27"/>
+  <text x="535" y="139" fill="#f3f3f4" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="18" font-weight="600">63%</text>
+  <circle cx="601" cy="132" r="11" fill="none" stroke="#44484d" stroke-width="3"/>
+  <circle cx="601" cy="132" r="11" fill="none" stroke="#d97757" stroke-width="3" stroke-dasharray="43.5 69" transform="rotate(-90 601 132)" stroke-linecap="round"/>
+  <rect x="639" y="120" width="1" height="25" fill="#343940"/>
+  <use href="#codex" x="661" y="118" width="27" height="27"/>
+  <text x="701" y="139" fill="#f3f3f4" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="18" font-weight="600">28%</text>
+  <circle cx="760" cy="132" r="11" fill="none" stroke="#44484d" stroke-width="3"/>
+  <circle cx="760" cy="132" r="11" fill="none" stroke="#8ec5ff" stroke-width="3" stroke-dasharray="19.3 69" transform="rotate(-90 760 132)" stroke-linecap="round"/>
+  <rect x="100" y="229" width="167" height="28" rx="14" fill="#fff" opacity=".8"/>
+  <text x="118" y="248" fill="#35383f" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="15" font-weight="600">Vista compacta</text>
+
+  <rect x="80" y="294" width="1120" height="335" rx="23" fill="url(#sky)"/>
+  <path d="M80 317Q80 294 103 294H1177Q1200 294 1200 317V330H80Z" fill="url(#glass)"/>
+  <text x="100" y="318" fill="#26303b" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="13" font-weight="600">Explorador</text>
+  <text x="1102" y="318" fill="#26303b" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="13">18:25</text>
+  <rect x="394" y="298" width="492" height="288" rx="28" fill="#030507" opacity=".24" filter="url(#shadow)"/>
+  <path d="M394 294H886C874 294 874 304 874 313V548Q874 576 846 576H434Q406 576 406 548V313C406 304 406 294 394 294Z" fill="#080a0e"/>
+  <text x="422" y="333" fill="#f4f4f5" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="18" font-weight="650">Uso de IA</text>
+  <text x="767" y="331" fill="#9ea5af" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="13">Actualizar</text>
+  <rect x="414" y="350" width="452" height="1" fill="#292c32"/>
+  <use href="#claude" x="422" y="369" width="28" height="28"/>
+  <text x="460" y="389" fill="#f2f3f5" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="17" font-weight="600">Claude</text>
+  <text x="802" y="389" text-anchor="end" fill="#b1b7bf" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="13">5 h · 63%</text>
+  <rect x="460" y="404" width="342" height="6" rx="3" fill="#34373d"/>
+  <rect x="460" y="404" width="215" height="6" rx="3" fill="#d97757"/>
+  <text x="802" y="428" text-anchor="end" fill="#9ea5af" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="12">5 h reinicia 21:40</text>
+  <text x="460" y="443" fill="#9ea5af" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="12">7 días · 19% usado</text>
+  <text x="802" y="443" text-anchor="end" fill="#9ea5af" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="12">Reinicia mañana 08:00</text>
+  <rect x="414" y="457" width="452" height="1" fill="#292c32"/>
+  <use href="#codex" x="422" y="470" width="28" height="28"/>
+  <text x="460" y="490" fill="#f2f3f5" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="17" font-weight="600">Codex</text>
+  <text x="802" y="490" text-anchor="end" fill="#b1b7bf" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="13">5 h · 28%</text>
+  <rect x="460" y="505" width="342" height="6" rx="3" fill="#34373d"/>
+  <rect x="460" y="505" width="96" height="6" rx="3" fill="#8ec5ff"/>
+  <text x="802" y="529" text-anchor="end" fill="#9ea5af" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="12">5 h reinicia 23:15</text>
+  <text x="460" y="544" fill="#9ea5af" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="12">7 días · 41% usado</text>
+  <text x="802" y="544" text-anchor="end" fill="#9ea5af" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="12">Reinicia el 21/11 08:00</text>
+  <text x="640" y="567" text-anchor="middle" fill="#777f8b" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="11">Actualizado hace 2 min</text>
+  <rect x="100" y="585" width="155" height="28" rx="14" fill="#fff" opacity=".8"/>
+  <text x="118" y="604" fill="#35383f" font-family="Segoe UI Variable,Segoe UI,sans-serif" font-size="15" font-weight="600">Vista ampliada</text>
+</svg>

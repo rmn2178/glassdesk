@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+PackageIdentifier: CrafterStation.Nosih
+PackageVersion: '0.1.16'
+MinimumOSVersion: 10.0.19045.0
+InstallerType: nullsoft
+Scope: user
+InstallModes:
+  - interactive
+  - silent
+  - silentWithProgress
+InstallerSwitches:
+  Silent: /S
+  SilentWithProgress: /P
+UpgradeBehavior: install
+ProductCode: Nosih
+ReleaseDate: 2026-11-20
+AppsAndFeaturesEntries:
+  - DisplayName: Nosih
+    Publisher: Nosih
+    DisplayVersion: '0.1.16'
+    ProductCode: Nosih
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/crafter-station/Nosih/releases/download/v0.1.16/Nosih_0.1.16_x64-setup.exe
+    InstallerSha256: 80568BF463E307ADCEBF7FF1309AA251F0CE91778B08DA0094D802E5362EB8BF
+ManifestType: installer
+ManifestVersion: 1.10.0

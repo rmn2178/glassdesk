@@ -1,0 +1,17 @@
+---
+// Minimized-window slot: it has no width until a window lands in it, so the dock
+// only shows a thumbnail while something is actually minimized.
+---
+
+<li class="dock-item dock-slot" data-dock-thumb inert>
+  <button
+    type="button"
+    class="dock-thumb"
+    data-dock-restore
+    aria-label="Show the minimized Notes window"
+  >
+    <canvas width="104" height="104"></canvas>
+  </button>
+  <span class="dock-tip" aria-hidden="true">Notes</span>
+  <i class="dock-dot" aria-hidden="true"></i>
+</li>

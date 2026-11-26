@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+PackageIdentifier: CrafterStation.Nosih
+PackageVersion: 0.1.5
+PackageLocale: en-US
+Publisher: Crafter Station
+PublisherUrl: https://github.com/crafter-station
+PublisherSupportUrl: https://github.com/crafter-station/Nosih/issues
+PrivacyUrl: https://nosih.crafter.run/privacy
+PackageName: Nosih
+PackageUrl: https://nosih.crafter.run
+License: MIT
+LicenseUrl: https://github.com/crafter-station/Nosih/blob/main/LICENSE
+ShortDescription: The macOS Dock, made for Windows 11.
+Description: Nosih replaces the Windows 11 taskbar with a glass dock in the style of macOS, with icons that grow under the cursor, minimized windows as live thumbnails and an optional menu bar. Quitting or uninstalling it brings the Windows taskbar back.
+Moniker: nosih
+Tags:
+  - dock
+  - taskbar
+  - macos
+  - launcher
+  - windows-11
+ReleaseNotesUrl: https://github.com/crafter-station/Nosih/releases/tag/v0.1.5
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0

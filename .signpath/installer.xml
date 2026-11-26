@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration "installer": the NSIS installer, built from
+  the already signed programs and uploaded by .github/workflows/release.yml.
+  Paste it in SignPath: Project > Artifact configurations > New, slug "installer".
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="Muelle-Setup.exe" product-name="Muelle">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

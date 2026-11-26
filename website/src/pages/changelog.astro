@@ -1,0 +1,346 @@
+---
+import Container from "@/components/layout/Container.astro";
+import SiteFooter from "@/components/layout/SiteFooter.astro";
+import SiteHeader from "@/components/layout/SiteHeader.astro";
+import Icon from "@/components/ui/Icon.astro";
+import { site } from "@/data/site";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { getReleases } from "@/lib/changelog";
+import "@/styles/showcase.css";
+
+const releases = await getReleases();
+const latest = releases[0];
+const dated = releases.filter((release) => release.date);
+const first = dated.at(-1)?.date;
+const changeCount = releases.reduce((total, release) => total + release.changes.length, 0);
+
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+
+const description = `Every Muelle release for Windows 10 and 11, from v${releases.at(-1)?.version} to v${latest?.version}: new dock features, fixes and AI usage providers.`;
+const canonical = new URL("/changelog", site.url).href;
+
+const schema = [
+  {
+    "@type": "CollectionPage",
+    "@id": `${canonical}#page`,
+    name: "Muelle changelog",
+    url: canonical,
+    description,
+    isPartOf: { "@id": new URL("/#website", site.url).href },
+    about: { "@id": new URL("/#app", site.url).href },
+    ...(latest?.date && { dateModified: latest.date }),
+    mainEntity: {
+      "@type": "ItemList",
+      itemListElement: releases.map((release, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: `Muelle ${release.version}`,
+        url: `${canonical}#v${release.version}`,
+      })),
+    },
+  },
+];
+---
+
+<BaseLayout title="Changelog - Muelle, the macOS-style dock for Windows" {description} product={false} {schema}>
+  <SiteHeader />
+
+  <main id="main" class="changelog pt-24 pb-10" data-changelog>
+    <Container>
+      <header class="intro" data-r>
+        <p class="intro-eyebrow">Changelog</p>
+        <h1 class="intro-title">Every release, in the open.</h1>
+        <p class="intro-lead">
+          Muelle ships small and often. Each version below is built from public source, signed, and published on
+          GitHub.
+        </p>
+      </header>
+
+      <dl class="cl-stats" data-r>
+        <div><dt>Latest</dt><dd>v{latest?.version}</dd></div>
+        <div><dt>Releases</dt><dd data-count={releases.length}>{releases.length}</dd></div>
+        <div><dt>Changes</dt><dd data-count={changeCount}>{changeCount}</dd></div>
+        {first && <div><dt>Since</dt><dd>{formatDate(first)}</dd></div>}
+      </dl>
+
+      <ol class="cl-list" aria-label="Releases">
+        <span class="cl-rail" aria-hidden="true"><span class="cl-rail-fill" data-rail></span></span>
+        {
+          releases.map((release, index) => (
+            <li class="cl-release" id={`v${release.version}`} data-release>
+              <div class="cl-when" data-r>
+                <span class="cl-dot" aria-hidden="true" />
+                <a class="cl-version" href={`#v${release.version}`}>
+                  v{release.version}
+                </a>
+                {release.date && <time datetime={release.date}>{formatDate(release.date)}</time>}
+                {index === 0 && <span class="cl-badge">Latest</span>}
+              </div>
+              <div class="cl-card" data-r>
+                <h2 class="sr-only">Muelle {release.version}</h2>
+                <ul>
+                  {release.changes.map((change) => (
+                    <li set:html={change} />
+                  ))}
+                </ul>
+                <a class="cl-link" href={release.url} target="_blank" rel="noopener noreferrer">
+                  Release notes and installer
+                  <Icon name="arrow-up-right" size={14} />
+                </a>
+              </div>
+            </li>
+          ))
+        }
+      </ol>
+    </Container>
+  </main>
+
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .cl-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    max-width: 760px;
+    margin: 56px auto 0;
+    border: 1px solid var(--color-line);
+    border-radius: 22px;
+    background: var(--color-card);
+    overflow: hidden;
+  }
+  .cl-stats div {
+    padding: 18px 20px;
+    text-align: center;
+  }
+  .cl-stats div + div {
+    border-left: 1px solid var(--color-line);
+  }
+  .cl-stats dt {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-mute);
+  }
+  .cl-stats dd {
+    margin-top: 6px;
+    font-size: 1.5rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cl-list {
+    position: relative;
+    max-width: 960px;
+    margin: 96px auto 0;
+    padding: 0;
+    list-style: none;
+  }
+  .cl-rail {
+    position: absolute;
+    top: 8px;
+    bottom: 0;
+    left: 7px;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--color-line);
+  }
+  .cl-rail-fill {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, var(--color-primary), var(--color-primary-end));
+    transform: scaleY(var(--progress, 1));
+    transform-origin: top;
+  }
+
+  .cl-release {
+    position: relative;
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 32px;
+    padding-bottom: 56px;
+    scroll-margin-top: 96px;
+  }
+  .cl-when {
+    position: sticky;
+    top: 88px;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-left: 36px;
+  }
+  .cl-dot {
+    position: absolute;
+    top: 6px;
+    left: 0;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--color-line);
+    border-radius: 50%;
+    background: var(--color-bg);
+    transition:
+      border-color 300ms ease-out,
+      box-shadow 300ms ease-out;
+  }
+  .cl-release.is-past .cl-dot,
+  .cl-release:first-child .cl-dot {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 18%, transparent);
+  }
+  .cl-version {
+    font-size: 1.75rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .cl-version:hover {
+    color: var(--color-signal);
+  }
+  .cl-when time {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-mute);
+  }
+  .cl-badge {
+    align-self: start;
+    margin-top: 4px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--gradient-primary);
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .cl-card {
+    padding: 28px 30px;
+    border: 1px solid var(--color-line);
+    border-radius: 24px;
+    background: var(--color-card);
+  }
+  .cl-card ul {
+    display: grid;
+    gap: 14px;
+    padding-left: 1.1rem;
+    list-style: disc;
+    line-height: 1.6;
+  }
+  .cl-card li::marker {
+    color: var(--color-primary);
+  }
+  .cl-card :global(code) {
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--color-fg) 7%, transparent);
+    font-family: var(--font-mono);
+    font-size: 0.86em;
+    overflow-wrap: anywhere;
+  }
+  .cl-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 22px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-mute);
+  }
+  .cl-link:hover {
+    color: var(--color-signal);
+  }
+
+  @media (max-width: 767px) {
+    .cl-release {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 16px;
+    }
+    .cl-when {
+      position: relative;
+      top: 0;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .cl-badge {
+      align-self: center;
+      margin-top: 0;
+    }
+    .cl-card {
+      margin-left: 36px;
+      padding: 22px;
+    }
+    .cl-stats div + div {
+      border-left: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cl-dot {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  import { gsap, ScrollTrigger, prefersReducedMotion } from "@/lib/motion";
+  import { initReveal } from "@/scripts/reveal";
+
+  const root = document.querySelector<HTMLElement>("[data-changelog]");
+  const list = root?.querySelector<HTMLElement>(".cl-list");
+  const fill = root?.querySelector<HTMLElement>("[data-rail]");
+
+  if (root && list && fill) {
+    initReveal(root);
+
+    if (!prefersReducedMotion()) {
+      // The rail fills as the reader moves through the releases.
+      fill.style.setProperty("--progress", "0");
+      ScrollTrigger.create({
+        trigger: list,
+        start: "top 60%",
+        end: "bottom 60%",
+        scrub: 0.4,
+        onUpdate: ({ progress }) => fill.style.setProperty("--progress", progress.toFixed(4)),
+      });
+
+      root.querySelectorAll<HTMLElement>("[data-release]").forEach((release) => {
+        ScrollTrigger.create({
+          trigger: release,
+          start: "top 60%",
+          onEnter: () => release.classList.add("is-past"),
+          onLeaveBack: () => release.classList.remove("is-past"),
+        });
+      });
+
+      // Totals count up once, when the strip first shows.
+      root.querySelectorAll<HTMLElement>("[data-count]").forEach((node) => {
+        const target = Number(node.dataset.count);
+        const counter = { value: 0 };
+        node.textContent = "0";
+        gsap.to(counter, {
+          value: target,
+          duration: 1.2,
+          ease: "power2.out",
+          scrollTrigger: { trigger: node, start: "top 95%", once: true },
+          onUpdate: () => {
+            node.textContent = String(Math.round(counter.value));
+          },
+        });
+      });
+    } else {
+      root.querySelectorAll<HTMLElement>("[data-release]").forEach((release) => release.classList.add("is-past"));
+    }
+  }
+</script>

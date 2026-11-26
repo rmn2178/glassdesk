@@ -1,0 +1,35 @@
+[package]
+name = "nosih-settings"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+nosih-config.workspace = true
+nosih-shell.workspace = true
+serde.workspace = true
+tauri = { version = "2", features = [] }
+tauri-plugin-updater = "2"
+# A second launch (dock menu, Start menu) focuses the open window instead of
+# opening another one that would save the same settings file.
+tauri-plugin-single-instance = "2"
+# `generate_context!` emits serde_json values for plugin settings.
+serde_json = "1"
+base64 = "0.23"
+png = "0.18"
+# Reuse the Dock's HTTP/TLS stack; instantiated only for an uncached choice.
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls", "system-proxy"] }
+sha2 = "0.10"
+windows = { workspace = true, features = ["Win32_System_Com", "Win32_UI_Shell"] }
+
+[features]
+# Serve the bundled front end instead of the Vite dev server. On by default so
+# a plain `cargo build` yields a working app; `tauri dev` turns it off.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

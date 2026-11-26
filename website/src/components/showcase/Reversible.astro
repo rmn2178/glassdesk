@@ -1,0 +1,135 @@
+---
+import { Image } from "astro:assets";
+import wallpaper from "@/assets/wallpapers/desktop-05.jpg";
+import Section from "@/components/layout/Section.astro";
+import SectionIntro from "@/components/showcase/SectionIntro.astro";
+import MenuBarStatus from "@/components/dock/MenuBarStatus.astro";
+import { previewIcons, safetyFacts, safetyIntro, taskbarIcons } from "@/data/showcase";
+import "@/styles/showcase.css";
+---
+
+<Section id="safety">
+  <SectionIntro {...safetyIntro} />
+
+  <div class="flip" data-flip data-r>
+    <div class="flip-control">
+      <span id="flip-label">Muelle</span>
+      <button
+        type="button"
+        role="switch"
+        class="mac-switch is-large"
+        aria-checked="false"
+        aria-labelledby="flip-label"
+        data-flip-switch
+      >
+        <i></i>
+      </button>
+    </div>
+
+    <div class="flip-desk" data-state="off" aria-live="polite">
+      <Image
+        src={wallpaper}
+        alt=""
+        class="flip-wall"
+        widths={[640, 1280]}
+        sizes="(min-width: 1024px) 900px, 100vw"
+      />
+
+      <div class="flip-menubar" aria-hidden="true">
+        <b>Muelle</b>
+        <span class="flip-menubar-status">
+          <MenuBarStatus />
+          <span class="hidden sm:inline" data-date>
+            Fri, Nov 14
+          </span>
+          <span class="tabular-nums" data-clock>
+            9:41
+          </span>
+        </span>
+      </div>
+
+      <div class="flip-dock" aria-hidden="true">
+        {previewIcons.map((icon) => (
+          <Image src={icon} alt="" class="w-34" />
+        ))}
+      </div>
+
+      <div class="flip-taskbar" aria-hidden="true">
+        <span class="flip-taskbar-apps">
+          <svg viewBox="0 0 24 24" class="flip-start">
+            <rect x="2" y="2" width="9.5" height="9.5" rx="1" />
+            <rect x="12.5" y="2" width="9.5" height="9.5" rx="1" />
+            <rect x="2" y="12.5" width="9.5" height="9.5" rx="1" />
+            <rect x="12.5" y="12.5" width="9.5" height="9.5" rx="1" />
+          </svg>
+          {taskbarIcons.map((icon) => (
+            <Image src={icon} alt="" width={64} height={64} />
+          ))}
+        </span>
+        <span class="flip-taskbar-clock tabular-nums" data-clock>
+          9:41
+        </span>
+      </div>
+
+      <p class="sr-only" data-flip-status>
+        The Windows taskbar is showing.
+      </p>
+    </div>
+  </div>
+
+  <ul class="facts">
+    {safetyFacts.map(({ title, body }, index) => (
+      <li data-r>
+        <span class="facts-mark" aria-hidden="true">
+          {index + 1}
+        </span>
+        <b>{title}</b>
+        <p>{body}</p>
+      </li>
+    ))}
+  </ul>
+</Section>
+
+<script>
+  import { initReveal } from "@/scripts/reveal";
+  import { initClock } from "@/scripts/clock";
+  import { prefersReducedMotion } from "@/lib/motion";
+
+  const section = document.querySelector<HTMLElement>("#safety");
+  const desk = section?.querySelector<HTMLElement>(".flip-desk");
+  const toggle = section?.querySelector<HTMLButtonElement>("[data-flip-switch]");
+  const status = section?.querySelector<HTMLElement>("[data-flip-status]");
+
+  if (section && desk && toggle) {
+    initReveal(section);
+    initClock();
+
+    const set = (on: boolean) => {
+      toggle.setAttribute("aria-checked", String(on));
+      desk.dataset.state = on ? "on" : "off";
+      if (status) {
+        status.textContent = on
+          ? "Muelle is running: dock and menu bar."
+          : "The Windows taskbar is showing.";
+      }
+    };
+
+    toggle.addEventListener("click", () => set(toggle.getAttribute("aria-checked") !== "true"));
+
+    // Muelle switches itself on the first time the desk comes into view, so the
+    // change is seen once without a click; after that the switch is the visitor's.
+    if (!prefersReducedMotion()) {
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (!entry?.isIntersecting) return;
+          observer.disconnect();
+          window.setTimeout(() => set(true), 700);
+        },
+        { threshold: 0.6 },
+      );
+      observer.observe(desk);
+    } else {
+      set(true);
+    }
+  }
+</script>

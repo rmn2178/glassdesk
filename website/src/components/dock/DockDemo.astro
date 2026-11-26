@@ -1,0 +1,35 @@
+---
+import DockItem from "@/components/dock/DockItem.astro";
+import DockThumb from "@/components/dock/DockThumb.astro";
+import { dockItems } from "@/data/dock";
+import "@/styles/dock.css";
+
+let dockSeparated = false;
+const entries = dockItems.map((item) => {
+  const separator = !dockSeparated && item.kind !== "app";
+  if (separator) dockSeparated = true;
+  return { item, separator };
+});
+---
+
+<nav aria-label="Muelle dock preview" class="dock-scroll flex justify-start overflow-x-auto px-2">
+  <ul class="dock">
+    {
+      entries.map(({ item, separator }) => (
+        <>
+          {separator && <li class="dock-sep" aria-hidden="true" />}
+          {separator && <DockThumb />}
+          <DockItem item={item} />
+        </>
+      ))
+    }
+  </ul>
+</nav>
+
+<script>
+  import { prefersReducedMotion } from "@/lib/motion";
+  import { initDock } from "@/scripts/dock";
+
+  const stage = document.querySelector<HTMLElement>(".desk");
+  if (stage) initDock(stage, prefersReducedMotion());
+</script>

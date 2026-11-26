@@ -1,0 +1,62 @@
+---
+import Container from "@/components/layout/Container.astro";
+import SiteFooter from "@/components/layout/SiteFooter.astro";
+import SiteHeader from "@/components/layout/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+
+interface Props {
+  title: string;
+  description: string;
+  /** Shown above the heading, e.g. the date of the last change. */
+  updated: string;
+}
+
+const { title, description, updated } = Astro.props;
+---
+
+<BaseLayout title={`${title} - Muelle`} description={description} product={false}>
+  <SiteHeader />
+  <main id="main" class="py-16">
+    <Container>
+      <article class="policy mx-auto max-w-[72ch]">
+        <p class="font-mono text-[11px] tracking-[0.08em] text-mute uppercase">Updated {updated}</p>
+        <h1 class="mt-3 text-[clamp(2rem,5vw,3rem)] leading-tight">{title}</h1>
+        <slot />
+      </article>
+    </Container>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .policy :global(h2) {
+    margin-top: 2.5rem;
+    font-size: 1.35rem;
+    font-weight: 700;
+  }
+  .policy :global(p),
+  .policy :global(ul) {
+    margin-top: 1rem;
+    line-height: 1.65;
+    color: var(--color-fg);
+  }
+  .policy :global(ul) {
+    padding-left: 1.25rem;
+    list-style: disc;
+  }
+  .policy :global(li + li) {
+    margin-top: 0.4rem;
+  }
+  .policy :global(a) {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .policy :global(a:hover) {
+    color: var(--color-signal);
+  }
+  .policy :global(code) {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    overflow-wrap: anywhere;
+  }
+</style>

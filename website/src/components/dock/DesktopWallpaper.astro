@@ -1,0 +1,25 @@
+---
+import { getImage } from "astro:assets";
+
+import { wallpapers } from "@/data/wallpapers";
+
+const urls = await Promise.all(
+  wallpapers.map(async (image) => {
+    const { src } = await getImage({ src: image, width: 1920, format: "webp", quality: 70 });
+    return src;
+  }),
+);
+---
+
+<div class="desk-wallpaper" data-wallpaper data-wallpaper-urls={JSON.stringify(urls)} aria-hidden="true">
+  <div class="desk-wallpaper-layer" data-wallpaper-layer></div>
+  <div class="desk-wallpaper-layer" data-wallpaper-layer></div>
+</div>
+
+<script>
+  import { prefersReducedMotion } from "@/lib/motion";
+  import { initWallpaper } from "@/scripts/wallpaper";
+
+  const root = document.querySelector<HTMLElement>("[data-wallpaper]");
+  if (root) initWallpaper(root, prefersReducedMotion());
+</script>

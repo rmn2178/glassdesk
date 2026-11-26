@@ -1,12 +1,10 @@
-# Dependencies & build outputs
+/target
 node_modules/
 dist/
-dist-artifacts/
-src-tauri/target/
-
-# OS & editor files
-.DS_Store
-Thumbs.db
+# configuración local de cargo (ruta de compilación fuera de OneDrive)
+/.cargo/config.toml
 *.log
-.vscode/
-.idea/
+ejemplos/**
+plan.md
+FIRMA-DE-CODIGO.md
+.tools/

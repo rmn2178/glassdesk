@@ -1,0 +1,15 @@
+---
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<div class:list={["traffic", className]}>
+  <span class="bg-[#ff5f57]"><i class="glyph not-italic" aria-hidden="true">×</i></span>
+  <button type="button" data-minimize aria-label="Minimize the Notes window preview" class="bg-[#febc2e]">
+    <i class="glyph not-italic" aria-hidden="true">−</i>
+  </button>
+  <span class="bg-[#28c840]"><i class="glyph not-italic" aria-hidden="true">+</i></span>
+</div>

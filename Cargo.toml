@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/dock", "apps/settings/src-tauri", "spikes"]
+
+[workspace.package]
+version = "0.1.25"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+windows = "0.62"
+windows-core = "0.62"
+windows-numerics = "0.3"
+nosih-config = { path = "crates/nosih-config" }
+nosih-core = { path = "crates/nosih-core" }
+nosih-shell = { path = "crates/nosih-shell" }
+
+[workspace.lints.clippy]
+perf = { level = "deny", priority = -1 }
+unwrap_used = "warn"
+expect_used = "warn"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+# Un fallo cierra el proceso sin más: el guardián devuelve la barra de tareas.
+panic = "abort"
