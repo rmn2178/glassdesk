@@ -63,7 +63,6 @@ jobs:
           $setup = Get-ChildItem target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
           if (-not $setup) { throw 'NSIS installer was not produced' }
           Copy-Item $setup.FullName release-assets/Nosih-Setup.exe -Force
-          Copy-Item $setup.FullName "release-assets/$($setup.Name)" -Force
           Get-FileHash release-assets/* -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash.ToLowerInvariant())  $(Split-Path -Leaf $_.Path)" } |
             Set-Content -Encoding utf8 release-assets/SHA256SUMS.txt

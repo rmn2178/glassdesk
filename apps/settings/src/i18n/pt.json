@@ -178,5 +178,9 @@
     "Passeio ao entardecer",
     "Cume",
     "Tóquio à noite"
-  ]
+  ],
+  "menuBarControlCenter": "Central de Controle estilo macOS",
+  "menuBarControlCenterHint": "Controle Wi-Fi, Bluetooth, brilho, volume e modo de energia direto do Nosih",
+  "menuBarNativeNotifications": "Notificações estilo macOS",
+  "menuBarNativeNotificationsHint": "Exibir banners de vidro e a Central de Notificações com calendário do Nosih"
 }

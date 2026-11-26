@@ -178,5 +178,9 @@
     "সন্ধ্যার ভ্রমণ",
     "শিখর",
     "টোকিওর রাত"
-  ]
+  ],
+  "menuBarControlCenter": "macOS-স্টাইল কন্ট্রোল সেন্টার",
+  "menuBarControlCenterHint": "Nosih থেকেই Wi-Fi, ব্লুটুথ, উজ্জ্বলতা, ভলিউম ও পাওয়ার মোড নিয়ন্ত্রণ করুন",
+  "menuBarNativeNotifications": "macOS-স্টাইল বিজ্ঞপ্তি",
+  "menuBarNativeNotificationsHint": "Nosih-এর গ্লাস ব্যানার এবং ক্যালেন্ডারসহ বিজ্ঞপ্তি কেন্দ্র দেখান"
 }

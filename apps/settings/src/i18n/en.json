@@ -178,5 +178,9 @@
     "Evening ride",
     "Summit",
     "Tokyo at night"
-  ]
+  ],
+  "menuBarControlCenter": "macOS-style Control Center",
+  "menuBarControlCenterHint": "Control Wi-Fi, Bluetooth, brightness, volume and power mode directly from Nosih",
+  "menuBarNativeNotifications": "macOS-style Notifications",
+  "menuBarNativeNotificationsHint": "Show Nosih glass notification banners and Notification Center with calendar"
 }

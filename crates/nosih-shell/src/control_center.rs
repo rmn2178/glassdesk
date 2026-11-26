@@ -12,7 +12,7 @@ use windows::{
         Foundation::{FreeLibrary, HANDLE, LPARAM, POINT, WPARAM},
         Graphics::Gdi::{HMONITOR, MONITOR_DEFAULTTOPRIMARY, MonitorFromPoint},
         System::{
-            LibraryLoader::{GetProcAddress, LoadLibraryW},
+            LibraryLoader::{GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW},
             Registry::{
                 HKEY, HKEY_CURRENT_USER, KEY_SET_VALUE, REG_DWORD, REG_OPTION_NON_VOLATILE,
                 RRF_RT_REG_DWORD, RegCloseKey, RegCreateKeyExW, RegGetValueW, RegSetValueExW,
@@ -167,7 +167,7 @@ type GetPhysicalMonitorsFn =
 type GetMonitorBrightnessFn =
     unsafe extern "system" fn(HANDLE, *mut u32, *mut u32, *mut u32) -> BOOL;
 type SetMonitorBrightnessFn = unsafe extern "system" fn(HANDLE, u32) -> BOOL;
-type DestroyPhysicalMonitorsFn = unsafe extern "system" fn(u32, *const PhysicalMonitor) -> BOOL;
+type DestroyPhysicalMonitorsFn = unsafe extern "system" fn(u32, *mut PhysicalMonitor) -> BOOL;
 
 /// Reads primary monitor brightness (0..=100). Tries DDC/CI via `dxva2.dll`
 /// first (fast path for external monitors), then falls back to WMI
@@ -191,7 +191,7 @@ fn ddc_get_brightness() -> Option<u8> {
     // SAFETY: Dynamically loads standard Windows `dxva2.dll`, resolves well-known
     // DDC/CI functions, and frees both physical monitor handles and the DLL.
     unsafe {
-        let module = LoadLibraryW(w!("dxva2.dll")).ok()?;
+        let module = LoadLibraryExW(w!("dxva2.dll"), None, LOAD_LIBRARY_SEARCH_SYSTEM32).ok()?;
         let result = (|| -> Option<u8> {
             let get_count = std::mem::transmute::<RawProc, GetNumberOfPhysicalMonitorsFn>(
                 GetProcAddress(module, s!("GetNumberOfPhysicalMonitorsFromHMONITOR"))?,
@@ -231,7 +231,7 @@ fn ddc_get_brightness() -> Option<u8> {
                     None
                 }
             });
-            let _ = destroy_monitors(count, monitors.as_ptr());
+            let _ = destroy_monitors(count, monitors.as_mut_ptr());
             reading
         })();
         let _ = FreeLibrary(module);
@@ -243,7 +243,7 @@ fn ddc_set_brightness(percent: u8) -> bool {
     // SAFETY: Dynamically loads standard Windows `dxva2.dll`, resolves well-known
     // DDC/CI functions, and frees both physical monitor handles and the DLL.
     unsafe {
-        let Ok(module) = LoadLibraryW(w!("dxva2.dll")) else {
+        let Ok(module) = LoadLibraryExW(w!("dxva2.dll"), None, LOAD_LIBRARY_SEARCH_SYSTEM32) else {
             return false;
         };
         let result = (|| -> bool {
@@ -300,7 +300,7 @@ fn ddc_set_brightness(percent: u8) -> bool {
                     any_ok |= set_brightness(monitor.handle, target.clamp(min_v, max_v)).as_bool();
                 }
             }
-            let _ = destroy_monitors(count, monitors.as_ptr());
+            let _ = destroy_monitors(count, monitors.as_mut_ptr());
             any_ok
         })();
         let _ = FreeLibrary(module);
@@ -354,7 +354,7 @@ pub fn lock_workstation() {
     type LockWorkStationFn = unsafe extern "system" fn() -> BOOL;
     // SAFETY: Dynamically invokes `user32.dll!LockWorkStation` with no arguments.
     unsafe {
-        if let Ok(module) = LoadLibraryW(w!("user32.dll")) {
+        if let Ok(module) = LoadLibraryExW(w!("user32.dll"), None, LOAD_LIBRARY_SEARCH_SYSTEM32) {
             if let Some(proc) = GetProcAddress(module, s!("LockWorkStation")) {
                 let lock = std::mem::transmute::<RawProc, LockWorkStationFn>(proc);
                 let _ = lock();
@@ -382,4 +382,133 @@ pub fn open_nosih_settings() {
         return;
     }
     let _ = crate::launcher::open("ms-settings:");
+}
+
+/* ------------------------------------------------------------ Power modes */
+
+const GUID_POWER_SAVER: &str = "a1841308-3541-4fab-bc81-f71556f20b4a";
+const GUID_BALANCED: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+const GUID_HIGH_PERF: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+
+/// Windows power plan exposed as a one-click cycle inside Control Center.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PowerMode {
+    PowerSaver,
+    #[default]
+    Balanced,
+    HighPerformance,
+}
+
+impl PowerMode {
+    #[must_use]
+    pub const fn next(self) -> Self {
+        match self {
+            Self::PowerSaver => Self::Balanced,
+            Self::Balanced => Self::HighPerformance,
+            Self::HighPerformance => Self::PowerSaver,
+        }
+    }
+
+    const fn guid(self) -> &'static str {
+        match self {
+            Self::PowerSaver => GUID_POWER_SAVER,
+            Self::Balanced => GUID_BALANCED,
+            Self::HighPerformance => GUID_HIGH_PERF,
+        }
+    }
+}
+
+fn parse_power_mode(output: &str) -> PowerMode {
+    let lower = output.to_ascii_lowercase();
+    if lower.contains(GUID_POWER_SAVER) {
+        PowerMode::PowerSaver
+    } else if lower.contains(GUID_HIGH_PERF) {
+        PowerMode::HighPerformance
+    } else {
+        PowerMode::Balanced
+    }
+}
+
+/// Reads the active Windows power plan. Call from a background worker thread.
+#[must_use]
+pub fn power_mode() -> PowerMode {
+    let Ok(output) = Command::new("powercfg.exe")
+        .arg("/getactivescheme")
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+    else {
+        return PowerMode::Balanced;
+    };
+    if !output.status.success() {
+        return PowerMode::Balanced;
+    }
+    parse_power_mode(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// Switches the active Windows power plan. Call from a background worker thread.
+pub fn set_power_mode(mode: PowerMode) -> bool {
+    Command::new("powercfg.exe")
+        .args(["/setactive", mode.guid()])
+        .creation_flags(CREATE_NO_WINDOW)
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+/* ----------------------------------------------------- System menu actions */
+
+/// Opens Windows "About This PC" settings page.
+pub fn open_about_pc() {
+    let _ = crate::launcher::open("ms-settings:about");
+}
+
+/// Puts the computer to sleep using `SetSuspendState(false, false, false)`.
+pub fn sleep_computer() {
+    // SAFETY: Standard Win32 power-state call with no pointers.
+    unsafe {
+        let _ = windows::Win32::System::Power::SetSuspendState(false, false, false);
+    }
+}
+
+/// Restarts Windows immediately.
+pub fn restart_computer() {
+    let _ = Command::new("shutdown.exe")
+        .args(["/r", "/t", "0"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn();
+}
+
+/// Shuts down Windows immediately.
+pub fn shut_down_computer() {
+    let _ = Command::new("shutdown.exe")
+        .args(["/s", "/t", "0"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn power_mode_cycles_in_order() {
+        assert_eq!(PowerMode::PowerSaver.next(), PowerMode::Balanced);
+        assert_eq!(PowerMode::Balanced.next(), PowerMode::HighPerformance);
+        assert_eq!(PowerMode::HighPerformance.next(), PowerMode::PowerSaver);
+    }
+
+    #[test]
+    fn parse_power_mode_matches_standard_windows_guids() {
+        assert_eq!(
+            parse_power_mode("Power Scheme GUID: a1841308-3541-4fab-bc81-f71556f20b4a  (Power saver)"),
+            PowerMode::PowerSaver
+        );
+        assert_eq!(
+            parse_power_mode("Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)"),
+            PowerMode::HighPerformance
+        );
+        assert_eq!(
+            parse_power_mode("Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)"),
+            PowerMode::Balanced
+        );
+    }
 }

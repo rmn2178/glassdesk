@@ -106,6 +106,10 @@ pub struct Config {
     /// it always did; the clock opens notifications either way unless
     /// `menu_bar_clock_target` says otherwise.
     pub menu_bar_notifications: bool,
+    /// Use Nosih's native macOS-style Control Center instead of Windows Quick Settings.
+    pub menu_bar_control_center: bool,
+    /// Use Nosih's native macOS-style Notification Center and pop-up banners instead of Windows'.
+    pub menu_bar_native_notifications: bool,
     /// What clicking the clock opens: an app, a shortcut, a document or a URI
     /// (e.g. the Clock app or a calendar). `None` keeps the notification
     /// center and calendar, as on the Windows taskbar.
@@ -384,6 +388,8 @@ impl Default for Config {
             menu_bar_music: true,
             menu_bar_island_style: IslandStyle::Notch,
             menu_bar_notifications: false,
+            menu_bar_control_center: true,
+            menu_bar_native_notifications: true,
             menu_bar_system_monitor: false,
             menu_bar_clock_target: None,
             accessory_battery: false,
@@ -985,6 +991,8 @@ mod tests {
     -> Result<(), serde_json::Error> {
         let older: Config = serde_json::from_str(r#"{"iconSize":56}"#)?;
         assert!(!older.menu_bar_notifications);
+        assert!(older.menu_bar_control_center);
+        assert!(older.menu_bar_native_notifications);
         assert_eq!(older.menu_bar_clock_target, None);
         let chosen: Config = serde_json::from_str(
             r#"{"menuBarNotifications":true,"menuBarClockTarget":"C:\\Apps\\Calendar.lnk"}"#,

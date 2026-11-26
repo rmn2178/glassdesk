@@ -217,7 +217,10 @@ test("a late initial wallpaper read cannot overwrite an explicit successful choi
 test("Bluetooth has no duplicate setting even with an old saved visibility override", () => {
   for (const language of Object.keys(texts)) for (const menuBarBluetooth of [false, true]) {
     const view = fixture("menubar", { language, menuBar: true, menuBarBluetooth });
-    assert.doesNotMatch(renderToStaticMarkup(view.body()), /Bluetooth/i);
+    const labels = [...elements(view.body())]
+      .filter((node) => "checked" in node.props)
+      .map((node) => node.props.label);
+    assert.ok(labels.every((label) => !/Bluetooth/i.test(label)));
   }
 });
 
@@ -231,6 +234,7 @@ test("retired Windows status-item overrides expose no controls and create no sav
       assert.deepEqual(controls.map((node) => node.props.label), [texts[language].menuBarShow,
         texts[language].menuBarMusic, texts[language].aiUsage,
         texts[language].accessoryBattery, texts[language].menuBarSystemMonitor,
+        texts[language].menuBarControlCenter, texts[language].menuBarNativeNotifications,
         texts[language].menuBarNotifications]);
       view.fire(60);
       await settle();

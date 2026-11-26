@@ -681,6 +681,20 @@ export function App() {
                     onChange={(menuBarSystemMonitor) => update({ menuBarSystemMonitor })}
                   />
                 </SubRow>
+                <SubRow label={t.menuBarControlCenter} hint={t.menuBarControlCenterHint} open={config.menuBar}>
+                  <Toggle
+                    label={t.menuBarControlCenter}
+                    checked={config.menuBarControlCenter ?? true}
+                    onChange={(menuBarControlCenter) => update({ menuBarControlCenter })}
+                  />
+                </SubRow>
+                <SubRow label={t.menuBarNativeNotifications} hint={t.menuBarNativeNotificationsHint} open={config.menuBar}>
+                  <Toggle
+                    label={t.menuBarNativeNotifications}
+                    checked={config.menuBarNativeNotifications ?? true}
+                    onChange={(menuBarNativeNotifications) => update({ menuBarNativeNotifications })}
+                  />
+                </SubRow>
                 <SubRow label={t.menuBarNotifications} hint={t.menuBarNotificationsHint} open={config.menuBar}>
                   <Toggle
                     label={t.menuBarNotifications}

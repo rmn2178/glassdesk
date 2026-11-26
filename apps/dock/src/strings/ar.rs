@@ -69,4 +69,12 @@ pub(super) const TEXT: Strings = Strings {
     notif_network_online: "تم الاتصال بالشبكة",
     notif_bt_on: "تم تفعيل البلوتوث",
     notif_bt_off: "تم إيقاف البلوتوث",
+    sys_about: "حول هذا الجهاز",
+    sys_sleep: "سكون",
+    sys_restart: "إعادة التشغيل",
+    sys_shutdown: "إيقاف التشغيل",
+    sys_force_quit: "إنهاء إجباري…",
+    power_saver: "توفير",
+    power_balanced: "متوازن",
+    power_performance: "أداء",
 };

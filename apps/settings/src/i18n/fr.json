@@ -178,5 +178,9 @@
     "Balade du soir",
     "Sommet",
     "Tokyo la nuit"
-  ]
+  ],
+  "menuBarControlCenter": "Centre de contrôle façon macOS",
+  "menuBarControlCenterHint": "Contrôlez Wi-Fi, Bluetooth, luminosité, volume et alimentation depuis Nosih",
+  "menuBarNativeNotifications": "Notifications façon macOS",
+  "menuBarNativeNotificationsHint": "Afficher les bannières et le centre de notifications avec calendrier de Nosih"
 }

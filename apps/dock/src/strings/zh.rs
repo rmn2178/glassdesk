@@ -69,4 +69,12 @@ pub(super) const TEXT: Strings = Strings {
     notif_network_online: "网络已连接",
     notif_bt_on: "蓝牙已开启",
     notif_bt_off: "蓝牙已关闭",
+    sys_about: "关于本机",
+    sys_sleep: "睡眠",
+    sys_restart: "重新启动",
+    sys_shutdown: "关机",
+    sys_force_quit: "强制退出…",
+    power_saver: "节能",
+    power_balanced: "平衡",
+    power_performance: "高性能",
 };

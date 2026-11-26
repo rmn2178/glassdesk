@@ -178,5 +178,9 @@
     "傍晚骑行",
     "山巅",
     "东京之夜"
-  ]
+  ],
+  "menuBarControlCenter": "macOS 风格控制中心",
+  "menuBarControlCenterHint": "直接从 Nosih 控制 Wi-Fi、蓝牙、亮度、音量和电源模式",
+  "menuBarNativeNotifications": "macOS 风格通知中心",
+  "menuBarNativeNotificationsHint": "使用 Nosih 玻璃通知横幅和带日历的通知中心"
 }

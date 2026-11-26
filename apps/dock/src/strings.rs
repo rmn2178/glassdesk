@@ -85,6 +85,14 @@ pub struct Strings {
     pub notif_network_online: &'static str,
     pub notif_bt_on: &'static str,
     pub notif_bt_off: &'static str,
+    pub sys_about: &'static str,
+    pub sys_sleep: &'static str,
+    pub sys_restart: &'static str,
+    pub sys_shutdown: &'static str,
+    pub sys_force_quit: &'static str,
+    pub power_saver: &'static str,
+    pub power_balanced: &'static str,
+    pub power_performance: &'static str,
 }
 
 /// 0 = not chosen yet (follow Windows). Nonzero values identify static catalogs.

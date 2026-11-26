@@ -178,5 +178,9 @@
     "शाम की सैर",
     "शिखर",
     "टोक्यो की रात"
-  ]
+  ],
+  "menuBarControlCenter": "macOS-शैली कंट्रोल सेंटर",
+  "menuBarControlCenterHint": "Nosih से सीधे Wi-Fi, ब्लूटूथ, ब्राइटनेस, वॉल्यूम और पावर मोड नियंत्रित करें",
+  "menuBarNativeNotifications": "macOS-शैली सूचनाएँ",
+  "menuBarNativeNotificationsHint": "Nosih के ग्लास नोटिफिकेशन बैनर और कैलेंडर वाला सूचना केंद्र दिखाएँ"
 }

@@ -37,6 +37,7 @@ pub struct State {
     pub do_not_disturb: bool,
     pub dark_mode: bool,
     pub brightness: Option<u8>,
+    pub power_mode: shell_cc::PowerMode,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,6 +48,7 @@ enum Command {
     ToggleDoNotDisturb,
     ToggleDarkMode,
     SetBrightness(u8),
+    CyclePowerMode,
 }
 
 pub struct Controller {
@@ -113,6 +115,10 @@ impl Controller {
 
     pub fn set_brightness(&self, percent: u8) {
         let _ = self.sender.try_send(Command::SetBrightness(percent.min(100)));
+    }
+
+    pub fn cycle_power_mode(&self) {
+        let _ = self.sender.try_send(Command::CyclePowerMode);
     }
 }
 
@@ -190,6 +196,7 @@ fn read_full_state() -> State {
         do_not_disturb: shell_cc::do_not_disturb(),
         dark_mode: shell_cc::is_dark_mode(),
         brightness: shell_cc::display_brightness(),
+        power_mode: shell_cc::power_mode(),
     }
 }
 
@@ -292,6 +299,13 @@ fn run(
                     next.brightness = Some(target);
                     publish(window, message, state, next);
                 }
+            }
+            Command::CyclePowerMode => {
+                let target = shell_cc::power_mode().next();
+                let _ = shell_cc::set_power_mode(target);
+                let mut next = snapshot_state(state);
+                next.power_mode = shell_cc::power_mode();
+                publish(window, message, state, next);
             }
         }
     }

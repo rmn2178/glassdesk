@@ -69,4 +69,12 @@ pub(super) const TEXT: Strings = Strings {
     notif_network_online: "Red conectada",
     notif_bt_on: "Bluetooth activado",
     notif_bt_off: "Bluetooth desactivado",
+    sys_about: "Acerca de este PC",
+    sys_sleep: "Suspender",
+    sys_restart: "Reiniciar",
+    sys_shutdown: "Apagar",
+    sys_force_quit: "Forzar salida…",
+    power_saver: "Ahorro",
+    power_balanced: "Equilibrado",
+    power_performance: "Alto",
 };

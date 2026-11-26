@@ -52,5 +52,3 @@ windows = { workspace = true, features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
-[dev-dependencies]
-windows = { workspace = true, features = ["Win32_System_LibraryLoader"] }

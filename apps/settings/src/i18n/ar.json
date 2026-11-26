@@ -178,5 +178,9 @@
     "جولة مسائية",
     "القمة",
     "طوكيو ليلاً"
-  ]
+  ],
+  "menuBarControlCenter": "مركز تحكم بأسلوب macOS",
+  "menuBarControlCenterHint": "تحكم في Wi-Fi والبلوتوث والسطوع والصوت ووضع الطاقة مباشرة من Nosih",
+  "menuBarNativeNotifications": "إشعارات بأسلوب macOS",
+  "menuBarNativeNotificationsHint": "عرض إشعارات Nosih الزجاجية ومركز الإشعارات مع التقويم"
 }

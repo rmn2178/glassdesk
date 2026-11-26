@@ -42,6 +42,10 @@ export interface Config {
   menuBarIslandStyle: IslandStyle;
   /** A bell at the right end of the menu bar that opens the notification center. */
   menuBarNotifications: boolean;
+  /** Use Nosih's native macOS-style Control Center instead of Windows Quick Settings. */
+  menuBarControlCenter?: boolean;
+  /** Use Nosih's native macOS-style Notification Center and pop-up banners. */
+  menuBarNativeNotifications?: boolean;
   /** What the clock opens (an app, shortcut or URI); null for the notification center. */
   menuBarClockTarget: string | null;
   accessoryBattery: boolean;

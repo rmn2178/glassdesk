@@ -69,4 +69,12 @@ pub(super) const TEXT: Strings = Strings {
     notif_network_online: "নেটওয়ার্ক সংযুক্ত",
     notif_bt_on: "ব্লুটুথ চালু",
     notif_bt_off: "ব্লুটুথ বন্ধ",
+    sys_about: "এই পিসি সম্পর্কে",
+    sys_sleep: "স্লিপ",
+    sys_restart: "রিস্টার্ট",
+    sys_shutdown: "শাট ডাউন",
+    sys_force_quit: "ফোর্স কুইট…",
+    power_saver: "সেভার",
+    power_balanced: "ব্যালেন্সড",
+    power_performance: "হাই",
 };

@@ -102,6 +102,8 @@ const VOLUME_TIMER: usize = 4;
 const BRIGHTNESS_TIMER: usize = 8;
 const NOTIFICATION_BANNER_TIMER: usize = 9;
 const CONTROL_CENTER_WIDTH: f32 = 320.0;
+const SYSTEM_MENU_WIDTH: f32 = 220.0;
+const SYSTEM_MENU_HEIGHT: f32 = 252.0;
 const NOTIFICATION_PANEL_WIDTH: f32 = 340.0;
 const NOTIFICATION_BANNER_HEIGHT: f32 = 74.0;
 const NOTIFICATION_BANNER_MS: u32 = 5_000;
@@ -195,10 +197,16 @@ pub(crate) mod glyph {
     pub const SETTINGS: char = '\u{E713}';
     pub const CLOSE: char = '\u{E711}';
     pub const APP_BADGE: char = '\u{E7E7}';
+    pub const SYSTEM_LOGO: char = '\u{E770}';
+    pub const POWER: char = '\u{E7E8}';
+    pub const RESTART: char = '\u{E777}';
+    pub const INFO: char = '\u{E946}';
+    pub const BOLT: char = '\u{E945}';
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Action {
+    SystemMenu,
     AccessoryIndicator,
     QuickSettings,
     Notifications,
@@ -228,6 +236,10 @@ pub struct MenuBarWidgets {
     pub notifications: bool,
     /// CPU, memory and network speed (`Config::menu_bar_system_monitor`).
     pub system_monitor: bool,
+    /// Native macOS-style Control Center instead of Windows Quick Settings.
+    pub control_center: bool,
+    /// Native macOS-style Notification Center and pop-up banners.
+    pub native_notifications: bool,
 }
 
 impl Default for MenuBarWidgets {
@@ -236,6 +248,8 @@ impl Default for MenuBarWidgets {
             island_style: IslandStyle::Notch,
             notifications: false,
             system_monitor: false,
+            control_center: true,
+            native_notifications: true,
         }
     }
 }
@@ -308,6 +322,7 @@ impl Look {
                 notifications_panel_height(self.notifications.items.len())
             }
             Some(Island::NotificationBanner) => NOTIFICATION_BANNER_HEIGHT,
+            Some(Island::SystemMenu) => SYSTEM_MENU_HEIGHT,
             Some(Island::Usage) => {
                 74.0 + Provider::ALL
                     .into_iter()
@@ -340,6 +355,7 @@ enum Island {
     ControlCenter,
     Notifications,
     NotificationBanner,
+    SystemMenu,
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -382,9 +398,19 @@ enum ControlCenterAction {
     ToggleDarkMode,
     ScreenSnip,
     LockScreen,
-    OpenPower,
-    OpenNetworkList,
+    CyclePowerMode,
     OpenSettings,
+}
+
+#[derive(Clone, Copy)]
+enum SystemMenuAction {
+    AboutPc,
+    OpenSettings,
+    Sleep,
+    Restart,
+    ShutDown,
+    LockScreen,
+    ForceQuit,
 }
 
 #[derive(Clone, Copy)]
@@ -409,6 +435,7 @@ enum IslandAction {
     ScrollUsage(i8),
     ControlCenter(ControlCenterAction),
     Notification(NotificationAction),
+    SystemMenu(SystemMenuAction),
 }
 
 #[derive(Clone, Copy)]
@@ -1608,7 +1635,8 @@ impl MenuBar {
         if self.slider_drag.is_some() && !inside {
             return Ok(());
         }
-        if !inside && self.panel.take().is_some() {
+        if !inside && matches!(self.panel, Some(Island::Music | Island::Usage)) {
+            self.panel = None;
             self.refresh(gfx)?;
         }
         if !self.auto_hide || self.revealed == inside {
@@ -1763,11 +1791,11 @@ impl MenuBar {
     /// A leave notification can already be queued when the hidden window is
     /// shown. Check the pointer rather than hiding a newly revealed bar on it.
     pub fn check_pointer(&mut self, gfx: &Gfx) -> Result<()> {
-        if self.panel.is_some() {
-            // SAFETY: Read-only Escape state; checked only while a popup is open.
-            if unsafe { windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState(0x1B) } < 0 {
-                return self.dismiss_island(gfx);
-            }
+        // SAFETY: Read-only Escape state; checked only while a popup is open.
+        if self.panel.is_some()
+            && unsafe { windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState(0x1B) } < 0
+        {
+            return self.dismiss_island(gfx);
         }
         let mut point = POINT::default();
         // SAFETY: Read-only cursor query in the same DPI context as `bounds`.
@@ -1832,7 +1860,12 @@ impl MenuBar {
         if self.panel.is_some()
             && !matches!(
                 self.panel,
-                Some(Island::ControlCenter | Island::Notifications | Island::NotificationBanner)
+                Some(
+                    Island::ControlCenter
+                        | Island::Notifications
+                        | Island::NotificationBanner
+                        | Island::SystemMenu,
+                )
             )
             && (x < span.left || x >= span.right)
         {
@@ -2000,6 +2033,11 @@ impl MenuBar {
     pub fn tick(&mut self, gfx: &Gfx) -> Result<()> {
         self.update_status();
         self.watch_network();
+        if self.widgets.native_notifications
+            && let Some(watcher) = &self.notification_watcher
+        {
+            watcher.refresh();
+        }
         let audio_changed = self
             .audio
             .as_ref()
@@ -2084,6 +2122,9 @@ impl MenuBar {
     }
 
     pub fn notifications_changed(&mut self, gfx: &Gfx) -> Result<()> {
+        if !self.widgets.native_notifications {
+            return Ok(());
+        }
         let Some(watcher) = &self.notification_watcher else {
             return Ok(());
         };
@@ -2132,6 +2173,9 @@ impl MenuBar {
         body: &str,
         category: NotificationCategory,
     ) {
+        if !self.widgets.native_notifications {
+            return;
+        }
         let dnd = shell_cc::do_not_disturb();
         if self.notifications.push(
             "Nosih",
@@ -2273,13 +2317,10 @@ impl MenuBar {
                             self.dismiss_island(gfx)?;
                             shell_cc::lock_workstation();
                         }
-                        ControlCenterAction::OpenPower => {
-                            self.dismiss_island(gfx)?;
-                            launcher::open_power_settings();
-                        }
-                        ControlCenterAction::OpenNetworkList => {
-                            self.dismiss_island(gfx)?;
-                            launcher::open_network_list();
+                        ControlCenterAction::CyclePowerMode => {
+                            if let Some(cc) = &self.control_center {
+                                cc.cycle_power_mode();
+                            }
                         }
                         ControlCenterAction::OpenSettings => {
                             self.dismiss_island(gfx)?;
@@ -2327,6 +2368,21 @@ impl MenuBar {
                         }
                     }
                 }
+                IslandAction::SystemMenu(action) => {
+                    self.dismiss_island(gfx)?;
+                    match action {
+                        SystemMenuAction::AboutPc => shell_cc::open_about_pc(),
+                        SystemMenuAction::OpenSettings => shell_cc::open_nosih_settings(),
+                        SystemMenuAction::Sleep => shell_cc::sleep_computer(),
+                        SystemMenuAction::Restart => shell_cc::restart_computer(),
+                        SystemMenuAction::ShutDown => shell_cc::shut_down_computer(),
+                        SystemMenuAction::LockScreen => shell_cc::lock_workstation(),
+                        SystemMenuAction::ForceQuit => {
+                            let _ = launcher::open("taskmgr.exe");
+                        }
+                    }
+                    return Ok(());
+                }
             }
             return self.refresh(gfx);
         }
@@ -2335,6 +2391,7 @@ impl MenuBar {
         }
         let was_control_center = self.panel == Some(Island::ControlCenter);
         let was_notifications = self.panel == Some(Island::Notifications);
+        let was_system_menu = self.panel == Some(Island::SystemMenu);
         self.dismiss_island(gfx)?;
         let hit = self
             .zones
@@ -2349,8 +2406,28 @@ impl MenuBar {
         });
         match hit.map(|(_, _, action)| *action) {
             Some(Action::AccessoryIndicator) => {}
-            Some(Action::QuickSettings | Action::Sound) => {
-                if !was_control_center {
+            Some(Action::SystemMenu) => {
+                if !was_system_menu {
+                    self.panel = Some(Island::SystemMenu);
+                    let mut track = TRACKMOUSEEVENT {
+                        cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
+                        dwFlags: TME_LEAVE,
+                        hwndTrack: self.hwnd,
+                        dwHoverTime: 0,
+                    };
+                    // SAFETY: `track` describes our live window.
+                    unsafe { TrackMouseEvent(&mut track)? };
+                    return self.refresh(gfx);
+                }
+            }
+            Some(action @ (Action::QuickSettings | Action::Sound)) => {
+                if !self.widgets.control_center {
+                    if action == Action::Sound {
+                        launcher::open_sound();
+                    } else {
+                        launcher::open_quick_settings();
+                    }
+                } else if !was_control_center {
                     self.panel = Some(Island::ControlCenter);
                     let mut track = TRACKMOUSEEVENT {
                         cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
@@ -2367,7 +2444,9 @@ impl MenuBar {
                 }
             }
             Some(Action::Notifications) => {
-                if !was_notifications {
+                if !self.widgets.native_notifications {
+                    launcher::open_notifications();
+                } else if !was_notifications {
                     self.open_notifications_panel(gfx)?;
                 }
             }
@@ -2376,7 +2455,9 @@ impl MenuBar {
                 // back to Nosih's native macOS-style Notification Center.
                 Some(target) if launcher::open(target).is_ok() => {}
                 _ => {
-                    if !was_notifications {
+                    if !self.widgets.native_notifications {
+                        launcher::open_notifications();
+                    } else if !was_notifications {
                         self.open_notifications_panel(gfx)?;
                     }
                 }
@@ -2745,14 +2826,14 @@ impl MenuBar {
     fn network_cue(&mut self, act: mascot::Act) {
         let t = strings::text();
         match act {
-            mascot::Act::NetworkDown => {
+            mascot::Act::Offline => {
                 self.push_notification(
                     t.notif_network_offline,
                     t.cc_wifi,
                     NotificationCategory::Network,
                 );
             }
-            mascot::Act::NetworkUp => {
+            mascot::Act::Online => {
                 let body = shell_cc::wifi_name().unwrap_or_else(|| t.cc_ethernet.to_owned());
                 self.push_notification(
                     t.notif_network_online,
@@ -2832,6 +2913,14 @@ impl MenuBar {
 
         self.zones.clear();
         let mut left_end = px(SIDE_MARGIN);
+        let sys_logo = gfx.glyph_brush(&[(glyph::SYSTEM_LOGO, 0.95)], scale, ink)?;
+        let sys_logo_zone = (
+            (left_end - px(HIT_SLOP)).max(0.0),
+            left_end + sys_logo.width + px(HIT_SLOP),
+            Action::SystemMenu,
+        );
+        place(&layers, &sys_logo, left_end)?;
+        left_end += sys_logo.width + px(12.0);
         if !look.app_name.is_empty() {
             let name = gfx.text_brush_fitted(
                 &look.app_name,
@@ -2841,7 +2930,7 @@ impl MenuBar {
                 ink,
                 px(220.0).min(width * 0.22),
             )?;
-            place(&layers, &name, px(SIDE_MARGIN))?;
+            place(&layers, &name, left_end)?;
             left_end += name.width;
         }
 
@@ -2964,6 +3053,8 @@ impl MenuBar {
             }
             right = left - px(ITEM_GAP);
         }
+        // Keep right-edge zones first so existing right-to-left ordering invariants hold.
+        self.zones.push(sys_logo_zone);
 
         // The system monitor (issue #64), left of the status icons: two
         // small stacked columns, CPU over memory, then upload over download.
@@ -3035,6 +3126,12 @@ impl MenuBar {
             };
         } else if look.panel == Some(Island::NotificationBanner) {
             self.draw_notification_banner(gfx, look, &layers, width, height)?;
+            self.triggers_span = Span {
+                left: 0.0,
+                right: width,
+            };
+        } else if look.panel == Some(Island::SystemMenu) {
+            self.draw_system_menu(gfx, look, &layers, width, height)?;
             self.triggers_span = Span {
                 left: 0.0,
                 right: width,
@@ -3252,14 +3349,18 @@ impl MenuBar {
                         .map(|(provider, x)| (provider, look.screen.left + (span.left + x) as i32))
                         .collect();
                 }
-                Island::ControlCenter | Island::Notifications | Island::NotificationBanner => {}
+                Island::ControlCenter
+                | Island::Notifications
+                | Island::NotificationBanner
+                | Island::SystemMenu => {}
             }
             let (left, right) = match kind {
                 Island::Music => (span.left, divider.unwrap_or(span.right)),
                 Island::Usage => (divider.unwrap_or(span.left), span.right),
-                Island::ControlCenter | Island::Notifications | Island::NotificationBanner => {
-                    (span.left, span.right)
-                }
+                Island::ControlCenter
+                | Island::Notifications
+                | Island::NotificationBanner
+                | Island::SystemMenu => (span.left, span.right),
             };
             self.island_hits.push(IslandHit {
                 bounds: (left, 0.0, right, bar_height),
@@ -3273,6 +3374,7 @@ impl MenuBar {
                 Island::Usage => ISLAND_EXPANDED_WIDTH,
                 Island::ControlCenter => CONTROL_CENTER_WIDTH,
                 Island::Notifications | Island::NotificationBanner => NOTIFICATION_PANEL_WIDTH,
+                Island::SystemMenu => SYSTEM_MENU_WIDTH,
             });
             self.panel_span = match style {
                 IslandStyle::Notch => panel_span(span, width, desired),
@@ -3314,8 +3416,112 @@ impl MenuBar {
                 Island::Usage => {
                     self.draw_usage_panel(gfx, &content, geometry, height, look, &providers)?
                 }
-                Island::ControlCenter | Island::Notifications | Island::NotificationBanner => {}
+                Island::ControlCenter
+                | Island::Notifications
+                | Island::NotificationBanner
+                | Island::SystemMenu => {}
             }
+        }
+        Ok(())
+    }
+
+    /// Renders the top-left macOS-style Nosih system menu (About, Settings,
+    /// Sleep, Restart, Shut Down, Lock Screen, Force Quit).
+    fn draw_system_menu(
+        &mut self,
+        gfx: &Gfx,
+        look: &Look,
+        layers: &VisualCollection,
+        screen_width: f32,
+        bar_height: f32,
+    ) -> Result<()> {
+        let px = |logical: f32| (logical * look.scale).round();
+        let panel_w = px(SYSTEM_MENU_WIDTH).min((screen_width - px(SIDE_MARGIN) * 2.0).max(0.0));
+        let panel_left = px(SIDE_MARGIN).round();
+        self.panel_span = Span {
+            left: panel_left,
+            right: panel_left + panel_w,
+        };
+        let geometry = IslandGeometry::new(self.panel_span, bar_height + px(PANEL_GAP), look);
+        let height = px(SYSTEM_MENU_HEIGHT);
+        let theme = Theme::for_popup(look.light, look.glass);
+        let content = popup_surface(gfx, theme, layers, geometry, height, px(14.0))?;
+        let c = &gfx.compositor;
+        let ink = geometry.ink();
+        let t = strings::text();
+        let divider_color = if look.light {
+            rgba(0, 0, 0, 22)
+        } else {
+            rgba(255, 255, 255, 26)
+        };
+
+        let pad_x = px(10.0);
+        let item_h = px(30.0);
+        let mut cur_y = px(10.0);
+        let rows: [Option<(char, &str, SystemMenuAction)>; 9] = [
+            Some((glyph::INFO, t.sys_about, SystemMenuAction::AboutPc)),
+            Some((glyph::SETTINGS, t.settings.trim_start_matches('&'), SystemMenuAction::OpenSettings)),
+            None,
+            Some((glyph::FOCUS, t.sys_sleep, SystemMenuAction::Sleep)),
+            Some((glyph::RESTART, t.sys_restart, SystemMenuAction::Restart)),
+            Some((glyph::POWER, t.sys_shutdown, SystemMenuAction::ShutDown)),
+            None,
+            Some((glyph::LOCK, t.cc_lock, SystemMenuAction::LockScreen)),
+            Some((glyph::CLOSE, t.sys_force_quit, SystemMenuAction::ForceQuit)),
+        ];
+        for row in rows {
+            let Some((g_ch, raw_label, action)) = row else {
+                add_visual(
+                    c,
+                    &content,
+                    &c.CreateColorBrushWithColor(divider_color)?.cast()?,
+                    pad_x + px(4.0),
+                    cur_y + px(5.0),
+                    geometry.width - (pad_x + px(4.0)) * 2.0,
+                    px(1.0).max(1.0),
+                )?;
+                cur_y += px(11.0);
+                continue;
+            };
+            let clean_label = raw_label.replace('&', "");
+            let sym = gfx.glyph_brush(&[(g_ch, 0.82)], geometry.scale, ink)?;
+            add_visual(
+                c,
+                &content,
+                &sym.brush.cast()?,
+                pad_x + px(8.0),
+                cur_y + (item_h - sym.height) / 2.0,
+                sym.width,
+                sym.height,
+            )?
+            .SetOpacity(0.84)?;
+            let text_x = pad_x + px(30.0);
+            let lbl = gfx.text_brush_fitted(
+                &clean_label,
+                geometry.scale,
+                12.0,
+                false,
+                ink,
+                (geometry.width - text_x - px(12.0)).max(px(40.0)),
+            )?;
+            add_visual(
+                c,
+                &content,
+                &lbl.brush.cast()?,
+                text_x,
+                cur_y + (item_h - lbl.height) / 2.0,
+                lbl.width,
+                lbl.height,
+            )?
+            .SetOpacity(0.92)?;
+            self.island_hits.push(geometry.hit(
+                pad_x,
+                cur_y,
+                geometry.width - pad_x * 2.0,
+                item_h,
+                IslandAction::SystemMenu(action),
+            ));
+            cur_y += item_h;
         }
         Ok(())
     }
@@ -4534,20 +4740,17 @@ impl MenuBar {
         let foot_h = px(36.0);
         let foot_gap = px(8.0);
         let foot_w = ((inner_w - foot_gap * 2.0) / 3.0).floor();
+        let mode_label = match cc.power_mode {
+            shell_cc::PowerMode::PowerSaver => t.power_saver,
+            shell_cc::PowerMode::Balanced => t.power_balanced,
+            shell_cc::PowerMode::HighPerformance => t.power_performance,
+        };
         let left_label = match look.battery {
-            Some(battery) => format!("{}%", battery.percent),
-            None => t.cc_ethernet.to_owned(),
+            Some(battery) => format!("{}% {mode_label}", battery.percent),
+            None => mode_label.to_owned(),
         };
-        let left_action = if look.battery.is_some() {
-            ControlCenterAction::OpenPower
-        } else {
-            ControlCenterAction::OpenNetworkList
-        };
-        let left_glyph = if look.battery.is_some() {
-            '\u{E83F}'
-        } else {
-            glyph::ETHERNET
-        };
+        let left_action = ControlCenterAction::CyclePowerMode;
+        let left_glyph = glyph::BOLT;
         for (idx, (g_ch, label_text, action)) in [
             (left_glyph, left_label.as_str(), left_action),
             (glyph::LOCK, t.cc_lock, ControlCenterAction::LockScreen),
@@ -5510,7 +5713,7 @@ fn available_panel(
     open.filter(|island| match island {
         Island::Music => music,
         Island::Usage => usage,
-        Island::ControlCenter | Island::Notifications => true,
+        Island::ControlCenter | Island::Notifications | Island::SystemMenu => true,
         Island::NotificationBanner => banner,
     })
 }
@@ -7710,6 +7913,10 @@ mod island_tests {
         assert_eq!(
             available_panel(Some(Island::Notifications), false, false, false),
             Some(Island::Notifications)
+        );
+        assert_eq!(
+            available_panel(Some(Island::SystemMenu), false, false, false),
+            Some(Island::SystemMenu)
         );
         assert_eq!(
             available_panel(Some(Island::NotificationBanner), false, false, false),
