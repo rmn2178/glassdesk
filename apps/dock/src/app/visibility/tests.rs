@@ -115,6 +115,8 @@ impl Fixture {
             flights: Vec::new(),
             snapshots: Vec::new(),
             menubar: None,
+            spotlight: None,
+            hud: None,
             edge_watch: None,
             dock_display: None,
             names: HashMap::new(),
