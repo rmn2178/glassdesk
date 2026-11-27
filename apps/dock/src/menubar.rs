@@ -104,6 +104,8 @@ const NOTIFICATION_BANNER_TIMER: usize = 9;
 const CONTROL_CENTER_WIDTH: f32 = 320.0;
 const SYSTEM_MENU_WIDTH: f32 = 220.0;
 const SYSTEM_MENU_HEIGHT: f32 = 252.0;
+const APP_MENU_WIDTH: f32 = 200.0;
+const SCREEN_CORNER_RADIUS: f32 = 10.0;
 const NOTIFICATION_PANEL_WIDTH: f32 = 340.0;
 const NOTIFICATION_BANNER_HEIGHT: f32 = 74.0;
 const NOTIFICATION_BANNER_MS: u32 = 5_000;
@@ -204,8 +206,16 @@ pub(crate) mod glyph {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AppMenuKind {
+    App,
+    File,
+    Window,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Action {
     SystemMenu,
+    AppMenu(AppMenuKind),
     AccessoryIndicator,
     QuickSettings,
     Notifications,
@@ -239,6 +249,14 @@ pub struct MenuBarWidgets {
     pub control_center: bool,
     /// Native macOS-style Notification Center and pop-up banners.
     pub native_notifications: bool,
+    /// Native macOS-style Spotlight search overlay instead of Windows Search.
+    pub spotlight_search: bool,
+    /// Native macOS-style volume and brightness HUD overlays.
+    pub native_hud: bool,
+    /// Active application menu dropdowns (`App`, `File`, `Window`) on the left.
+    pub app_menus: bool,
+    /// Subtle curved black masks at the top-left and top-right screen corners.
+    pub rounded_corners: bool,
 }
 
 impl Default for MenuBarWidgets {
@@ -249,6 +267,10 @@ impl Default for MenuBarWidgets {
             system_monitor: false,
             control_center: true,
             native_notifications: true,
+            spotlight_search: true,
+            native_hud: true,
+            app_menus: true,
+            rounded_corners: true,
         }
     }
 }
@@ -322,6 +344,7 @@ impl Look {
             }
             Some(Island::NotificationBanner) => NOTIFICATION_BANNER_HEIGHT,
             Some(Island::SystemMenu) => SYSTEM_MENU_HEIGHT,
+            Some(Island::AppMenu(kind)) => app_menu_height(kind),
             Some(Island::Usage) => {
                 74.0 + Provider::ALL
                     .into_iter()
@@ -355,6 +378,7 @@ enum Island {
     Notifications,
     NotificationBanner,
     SystemMenu,
+    AppMenu(AppMenuKind),
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -423,6 +447,19 @@ enum NotificationAction {
 }
 
 #[derive(Clone, Copy)]
+enum AppMenuAction {
+    Hide,
+    HideOthers,
+    Quit,
+    NewWindow,
+    CloseWindow,
+    Minimize,
+    Zoom,
+    Center,
+    BringAllToFront,
+}
+
+#[derive(Clone, Copy)]
 enum IslandAction {
     Toggle(Island),
     Media(MediaControl),
@@ -435,6 +472,7 @@ enum IslandAction {
     ControlCenter(ControlCenterAction),
     Notification(NotificationAction),
     SystemMenu(SystemMenuAction),
+    AppMenu(AppMenuAction),
 }
 
 #[derive(Clone, Copy)]
@@ -660,6 +698,11 @@ pub struct MenuBar {
     surface: ContainerVisual,
     appbar: Option<AppBar>,
     app_name: String,
+    active_hwnd: isize,
+    active_app_id: String,
+    active_app_hwnds: Vec<isize>,
+    tracked_hwnds: Vec<isize>,
+    banner_revealed: bool,
     look: Option<Look>,
     /// Clickable spans, in window pixels.
     zones: Vec<(f32, f32, Action)>,
@@ -707,6 +750,7 @@ pub struct MenuBar {
         CompositionSurfaceBrush,
     )>,
     logo_brush: Option<(bool, CompositionSurfaceBrush)>,
+    corner_brushes: Option<(u32, CompositionSurfaceBrush, CompositionSurfaceBrush)>,
     control_center: Option<control_center::Controller>,
     notifications: NotificationCenter,
     notification_watcher: Option<notifications::Watcher>,
@@ -1368,6 +1412,11 @@ impl MenuBar {
             surface,
             appbar: AppBar::register(hwnd, APPBAR_CALLBACK),
             app_name: String::new(),
+            active_hwnd: 0,
+            active_app_id: String::new(),
+            active_app_hwnds: Vec::new(),
+            tracked_hwnds: Vec::new(),
+            banner_revealed: false,
             look: None,
             zones: Vec::new(),
             visible: true,
@@ -1402,6 +1451,7 @@ impl MenuBar {
             media_enabled,
             cover: None,
             logo_brush: None,
+            corner_brushes: None,
             control_center: control_center::Controller::start(hwnd, CONTROL_CENTER_CHANGED),
             notifications: NotificationCenter::new(),
             notification_watcher: notifications::Watcher::start(hwnd, NOTIFICATIONS_CHANGED),
@@ -1446,6 +1496,19 @@ impl MenuBar {
         }
         name.clone_into(&mut self.app_name);
         self.refresh(gfx)
+    }
+
+    pub fn set_window_context(
+        &mut self,
+        active_hwnd: isize,
+        active_app_id: String,
+        active_app_hwnds: Vec<isize>,
+        tracked_hwnds: Vec<isize>,
+    ) {
+        self.active_hwnd = active_hwnd;
+        self.active_app_id = active_app_id;
+        self.active_app_hwnds = active_app_hwnds;
+        self.tracked_hwnds = tracked_hwnds;
     }
 
     /// Hidden while an app is full screen.
@@ -1621,6 +1684,17 @@ impl MenuBar {
             return Ok(());
         }
         self.widgets = widgets;
+        let should_dismiss = match self.panel {
+            Some(Island::ControlCenter) => !widgets.control_center,
+            Some(Island::Notifications | Island::NotificationBanner) => {
+                !widgets.native_notifications
+            }
+            Some(Island::AppMenu(_)) => !widgets.app_menus,
+            _ => false,
+        };
+        if should_dismiss {
+            self.dismiss_island(gfx)?;
+        }
         self.refresh(gfx)
     }
 
@@ -1642,6 +1716,7 @@ impl MenuBar {
                             | Island::Notifications
                             | Island::NotificationBanner
                             | Island::SystemMenu
+                            | Island::AppMenu(_)
                     )
                 ))
         {
@@ -1876,7 +1951,8 @@ impl MenuBar {
                     Island::ControlCenter
                         | Island::Notifications
                         | Island::NotificationBanner
-                        | Island::SystemMenu,
+                        | Island::SystemMenu
+                        | Island::AppMenu(_),
                 )
             )
             && (x < span.left || x >= span.right)
@@ -1995,8 +2071,10 @@ impl MenuBar {
     }
 
     fn sync_outside_click_hook(&mut self) -> Result<()> {
-        let needed =
-            self.panel_span.width() > 0.0 && self.visible && (!self.auto_hide || self.revealed);
+        let needed = self.panel_span.width() > 0.0
+            && self.panel != Some(Island::NotificationBanner)
+            && self.visible
+            && (!self.auto_hide || self.revealed);
         if needed && self.outside_click_hook.is_none() {
             // SAFETY: This process owns the hook procedure and installs the hook
             // only while the panel is visible.
@@ -2083,7 +2161,17 @@ impl MenuBar {
     }
 
     fn apply_volume_reading(&mut self, gfx: &Gfx, volume: Option<Volume>) -> Result<()> {
+        let prev = self.look.as_ref().and_then(|look| look.status.volume);
         self.status.volume = volume;
+        if self.widgets.native_hud
+            && self.started_at.elapsed() >= Duration::from_secs(4)
+            && !matches!(self.panel, Some(Island::ControlCenter | Island::Music))
+            && self.slider_drag.is_none()
+            && let Some(vol) = volume
+            && prev.is_some_and(|old| old.percent != vol.percent || old.muted != vol.muted)
+        {
+            crate::app::show_hud_volume(vol.percent, vol.muted);
+        }
         if let Some(look) = &self.look
             && same_volume_indicator(look.status.volume, volume)
         {
@@ -2116,12 +2204,23 @@ impl MenuBar {
             .as_ref()
             .map(control_center::Controller::snapshot)
             .unwrap_or_default();
-        if self.slider_drag.is_none() && cc_state.brightness.is_some() {
+        if self.slider_drag.is_none()
+            && (cc_state.brightness == self.brightness_target || cc_state.brightness.is_none())
+        {
             self.brightness_target = None;
         }
         let Some(mut look) = self.look.clone() else {
             return self.refresh(gfx);
         };
+        if self.widgets.native_hud
+            && self.started_at.elapsed() >= Duration::from_secs(4)
+            && self.panel != Some(Island::ControlCenter)
+            && self.slider_drag.is_none()
+            && let Some(b) = cc_state.brightness
+            && look.control_center.brightness.is_some_and(|prev| prev != b)
+        {
+            crate::app::show_hud_brightness(b);
+        }
         let appearance = appearance::menu_bar();
         if look.control_center == cc_state
             && look.material == appearance.material
@@ -2163,6 +2262,9 @@ impl MenuBar {
         self.notifications.dismiss_banner();
         if self.panel == Some(Island::NotificationBanner) {
             self.panel = None;
+            if std::mem::take(&mut self.banner_revealed) && self.auto_hide {
+                self.revealed = false;
+            }
             return self.refresh(gfx);
         }
         Ok(())
@@ -2171,6 +2273,10 @@ impl MenuBar {
     fn show_notification_banner(&mut self) {
         if self.panel.is_none() || self.panel == Some(Island::NotificationBanner) {
             self.panel = Some(Island::NotificationBanner);
+            if self.auto_hide && !self.revealed {
+                self.revealed = true;
+                self.banner_revealed = true;
+            }
             // SAFETY: One-shot timer on our own live MenuBar window.
             unsafe {
                 SetTimer(
@@ -2403,6 +2509,56 @@ impl MenuBar {
                     }
                     return Ok(());
                 }
+                IslandAction::AppMenu(action) => {
+                    self.dismiss_island(gfx)?;
+                    let hwnd = self.active_hwnd;
+                    let app_hwnds: &[isize] = if self.active_app_hwnds.is_empty() {
+                        std::slice::from_ref(&hwnd)
+                    } else {
+                        &self.active_app_hwnds
+                    };
+                    match action {
+                        AppMenuAction::Hide => {
+                            for &h in app_hwnds {
+                                nosih_shell::window_actions::minimize(h);
+                            }
+                        }
+                        AppMenuAction::Minimize => {
+                            nosih_shell::window_actions::minimize(hwnd);
+                        }
+                        AppMenuAction::HideOthers => {
+                            nosih_shell::window_actions::hide_others(
+                                app_hwnds,
+                                &self.tracked_hwnds,
+                            );
+                        }
+                        AppMenuAction::Quit => {
+                            for &h in app_hwnds {
+                                nosih_shell::window_actions::close_window(h);
+                            }
+                        }
+                        AppMenuAction::CloseWindow => {
+                            nosih_shell::window_actions::close_window(hwnd);
+                        }
+                        AppMenuAction::NewWindow => {
+                            if !self.active_app_id.is_empty() {
+                                let _ = launcher::open(&self.active_app_id);
+                            } else {
+                                nosih_shell::window_actions::open_new_window(hwnd);
+                            }
+                        }
+                        AppMenuAction::Zoom => {
+                            nosih_shell::window_actions::toggle_zoom(hwnd);
+                        }
+                        AppMenuAction::Center => {
+                            nosih_shell::window_actions::center_on_monitor(hwnd);
+                        }
+                        AppMenuAction::BringAllToFront => {
+                            nosih_shell::window_actions::bring_all_to_front(app_hwnds);
+                        }
+                    }
+                    return Ok(());
+                }
             }
             return self.refresh(gfx);
         }
@@ -2412,6 +2568,10 @@ impl MenuBar {
         let was_control_center = self.panel == Some(Island::ControlCenter);
         let was_notifications = self.panel == Some(Island::Notifications);
         let was_system_menu = self.panel == Some(Island::SystemMenu);
+        let was_app_menu = match self.panel {
+            Some(Island::AppMenu(kind)) => Some(kind),
+            _ => None,
+        };
         self.dismiss_island(gfx)?;
         let hit = self
             .zones
@@ -2429,6 +2589,20 @@ impl MenuBar {
             Some(Action::SystemMenu) => {
                 if !was_system_menu {
                     self.panel = Some(Island::SystemMenu);
+                    let mut track = TRACKMOUSEEVENT {
+                        cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
+                        dwFlags: TME_LEAVE,
+                        hwndTrack: self.hwnd,
+                        dwHoverTime: 0,
+                    };
+                    // SAFETY: `track` describes our live window.
+                    unsafe { TrackMouseEvent(&mut track)? };
+                    return self.refresh(gfx);
+                }
+            }
+            Some(Action::AppMenu(kind)) => {
+                if was_app_menu != Some(kind) {
+                    self.panel = Some(Island::AppMenu(kind));
                     let mut track = TRACKMOUSEEVENT {
                         cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
                         dwFlags: TME_LEAVE,
@@ -2485,7 +2659,13 @@ impl MenuBar {
             Some(Action::Power) => launcher::open_power_settings(),
             Some(Action::Network) => launcher::open_network_list(),
             // Handled alongside Action::QuickSettings above.
-            Some(Action::Search) => launcher::open_search(),
+            Some(Action::Search) => {
+                if self.widgets.spotlight_search {
+                    crate::app::open_spotlight();
+                } else {
+                    launcher::open_search();
+                }
+            }
             Some(Action::TaskView) => launcher::open_task_view(),
             Some(Action::Widgets) => launcher::open_widgets(),
             Some(Action::Bluetooth) => launcher::open_bluetooth(),
@@ -2880,11 +3060,16 @@ impl MenuBar {
         let px = |logical: f32| (logical * scale).round();
         let screen = look.screen;
         let (width, height) = ((screen.right - screen.left) as f32, px(HEIGHT));
+        let corner_r = if look.widgets.rounded_corners {
+            px(SCREEN_CORNER_RADIUS)
+        } else {
+            0.0
+        };
         let panel_bottom = height + px(PANEL_GAP) + px(look.panel_height());
         let visual_height = if look.panel.is_some() {
-            panel_bottom + px(PANEL_SHADOW_MARGIN)
+            (panel_bottom + px(PANEL_SHADOW_MARGIN)).max(height + corner_r)
         } else {
-            height
+            height + corner_r
         };
         let ink = if look.light { Ink::Dark } else { Ink::Light };
 
@@ -2972,7 +3157,9 @@ impl MenuBar {
             )?;
         }
         left_end += logo_side + px(12.0);
+        let mut app_menu_zones: Vec<(f32, f32, Action)> = Vec::new();
         if !look.app_name.is_empty() {
+            let name_left = left_end;
             let name = gfx.text_brush_fitted(
                 &look.app_name,
                 scale,
@@ -2983,6 +3170,29 @@ impl MenuBar {
             )?;
             place(&layers, &name, left_end)?;
             left_end += name.width;
+            if look.widgets.app_menus {
+                app_menu_zones.push((
+                    (name_left - px(HIT_SLOP)).max(0.0),
+                    left_end + px(HIT_SLOP),
+                    Action::AppMenu(AppMenuKind::App),
+                ));
+                let t = strings::text();
+                for (label, kind) in [
+                    (t.app_menu_file, AppMenuKind::File),
+                    (t.app_menu_window, AppMenuKind::Window),
+                ] {
+                    left_end += px(14.0);
+                    let item_left = left_end;
+                    let brush = gfx.text_brush_sized(label, scale, 13.0, false, ink)?;
+                    place(&layers, &brush, left_end)?;
+                    left_end += brush.width;
+                    app_menu_zones.push((
+                        item_left - px(HIT_SLOP),
+                        left_end + px(HIT_SLOP),
+                        Action::AppMenu(kind),
+                    ));
+                }
+            }
         }
 
         // Right side, from the edge inward.
@@ -3106,6 +3316,7 @@ impl MenuBar {
         }
         // Keep right-edge zones first so existing right-to-left ordering invariants hold.
         self.zones.push(sys_logo_zone);
+        self.zones.extend(app_menu_zones);
 
         // The system monitor (issue #64), left of the status icons: two
         // small stacked columns, CPU over memory, then upload over download.
@@ -3187,6 +3398,15 @@ impl MenuBar {
                 left: 0.0,
                 right: width,
             };
+        } else if let Some(Island::AppMenu(kind)) = look.panel {
+            self.draw_app_menu(gfx, look, &layers, width, height, kind)?;
+            self.triggers_span = Span {
+                left: 0.0,
+                right: width,
+            };
+        }
+        if look.widgets.rounded_corners && corner_r > 0.0 {
+            self.draw_screen_corners(gfx, &layers, width, corner_r)?;
         }
         if let Some(drag) = self.slider_drag {
             let still_present = self.island_hits.iter().any(|hit| match (drag, hit.action) {
@@ -3403,7 +3623,8 @@ impl MenuBar {
                 Island::ControlCenter
                 | Island::Notifications
                 | Island::NotificationBanner
-                | Island::SystemMenu => {}
+                | Island::SystemMenu
+                | Island::AppMenu(_) => {}
             }
             let (left, right) = match kind {
                 Island::Music => (span.left, divider.unwrap_or(span.right)),
@@ -3411,7 +3632,8 @@ impl MenuBar {
                 Island::ControlCenter
                 | Island::Notifications
                 | Island::NotificationBanner
-                | Island::SystemMenu => (span.left, span.right),
+                | Island::SystemMenu
+                | Island::AppMenu(_) => (span.left, span.right),
             };
             self.island_hits.push(IslandHit {
                 bounds: (left, 0.0, right, bar_height),
@@ -3426,6 +3648,7 @@ impl MenuBar {
                 Island::ControlCenter => CONTROL_CENTER_WIDTH,
                 Island::Notifications | Island::NotificationBanner => NOTIFICATION_PANEL_WIDTH,
                 Island::SystemMenu => SYSTEM_MENU_WIDTH,
+                Island::AppMenu(_) => APP_MENU_WIDTH,
             });
             self.panel_span = match style {
                 IslandStyle::Notch => panel_span(span, width, desired),
@@ -3474,7 +3697,8 @@ impl MenuBar {
                 Island::ControlCenter
                 | Island::Notifications
                 | Island::NotificationBanner
-                | Island::SystemMenu => {}
+                | Island::SystemMenu
+                | Island::AppMenu(_) => {}
             }
         }
         Ok(())
@@ -3582,6 +3806,152 @@ impl MenuBar {
             ));
             cur_y += item_h;
         }
+        Ok(())
+    }
+
+    /// Renders a compact Liquid Glass dropdown for the active app's `App`, `File`, or `Window` menu.
+    fn draw_app_menu(
+        &mut self,
+        gfx: &Gfx,
+        look: &Look,
+        layers: &VisualCollection,
+        screen_width: f32,
+        bar_height: f32,
+        kind: AppMenuKind,
+    ) -> Result<()> {
+        let px = |logical: f32| (logical * look.scale).round();
+        let panel_w = px(APP_MENU_WIDTH).min((screen_width - px(SIDE_MARGIN) * 2.0).max(0.0));
+        let anchor_left = self
+            .zones
+            .iter()
+            .find(|(_, _, action)| *action == Action::AppMenu(kind))
+            .map_or(px(SIDE_MARGIN), |(left, _, _)| *left + px(HIT_SLOP));
+        let max_left = (screen_width - px(SIDE_MARGIN) - panel_w).max(px(SIDE_MARGIN));
+        let panel_left = anchor_left.clamp(px(SIDE_MARGIN), max_left).round();
+        self.panel_span = Span {
+            left: panel_left,
+            right: panel_left + panel_w,
+        };
+        let geometry = IslandGeometry::new(self.panel_span, bar_height + px(PANEL_GAP), look);
+        let height = px(app_menu_height(kind));
+        let theme = Theme::for_popup_look(appearance::Look {
+            material: look.material,
+            light: look.light,
+            glass: look.glass,
+        });
+        let content = popup_surface(gfx, theme, layers, geometry, height, px(14.0))?;
+        let c = &gfx.compositor;
+        let ink = geometry.ink();
+        let t = strings::text();
+        let divider_color = if look.light {
+            rgba(0, 0, 0, 22)
+        } else {
+            rgba(255, 255, 255, 26)
+        };
+
+        let app_rows: [Option<(&str, AppMenuAction)>; 4] = [
+            Some((t.app_menu_hide, AppMenuAction::Hide)),
+            Some((t.app_menu_hide_others, AppMenuAction::HideOthers)),
+            None,
+            Some((t.app_menu_quit, AppMenuAction::Quit)),
+        ];
+        let file_rows: [Option<(&str, AppMenuAction)>; 2] = [
+            Some((t.app_menu_new_window, AppMenuAction::NewWindow)),
+            Some((t.app_menu_close_window, AppMenuAction::CloseWindow)),
+        ];
+        let window_rows: [Option<(&str, AppMenuAction)>; 5] = [
+            Some((t.app_menu_minimize, AppMenuAction::Minimize)),
+            Some((t.app_menu_zoom, AppMenuAction::Zoom)),
+            Some((t.app_menu_center, AppMenuAction::Center)),
+            None,
+            Some((t.app_menu_bring_all, AppMenuAction::BringAllToFront)),
+        ];
+        let rows: &[Option<(&str, AppMenuAction)>] = match kind {
+            AppMenuKind::App => &app_rows,
+            AppMenuKind::File => &file_rows,
+            AppMenuKind::Window => &window_rows,
+        };
+
+        let pad_x = px(10.0);
+        let item_h = px(30.0);
+        let mut cur_y = px(10.0);
+        for &row in rows {
+            let Some((label, action)) = row else {
+                add_visual(
+                    c,
+                    &content,
+                    &c.CreateColorBrushWithColor(divider_color)?.cast()?,
+                    pad_x + px(4.0),
+                    cur_y + px(5.0),
+                    geometry.width - (pad_x + px(4.0)) * 2.0,
+                    px(1.0).max(1.0),
+                )?;
+                cur_y += px(11.0);
+                continue;
+            };
+            let text_x = pad_x + px(8.0);
+            let lbl = gfx.text_brush_fitted(
+                label,
+                geometry.scale,
+                12.0,
+                false,
+                ink,
+                (geometry.width - text_x - px(12.0)).max(px(40.0)),
+            )?;
+            add_visual(
+                c,
+                &content,
+                &lbl.brush.cast()?,
+                text_x,
+                cur_y + (item_h - lbl.height) / 2.0,
+                lbl.width,
+                lbl.height,
+            )?
+            .SetOpacity(0.92)?;
+            self.island_hits.push(geometry.hit(
+                pad_x,
+                cur_y,
+                geometry.width - pad_x * 2.0,
+                item_h,
+                IslandAction::AppMenu(action),
+            ));
+            cur_y += item_h;
+        }
+        Ok(())
+    }
+
+    /// Draws subtle curved black bezel masks at the top-left and top-right
+    /// corners of the menu bar strip, matching macOS display geometry without
+    /// extending the menu bar window over maximized window controls.
+    fn draw_screen_corners(
+        &mut self,
+        gfx: &Gfx,
+        layers: &VisualCollection,
+        screen_width: f32,
+        corner_r: f32,
+    ) -> Result<()> {
+        let side = corner_r.round().max(1.0) as u32;
+        let (left_brush, right_brush) = match &self.corner_brushes {
+            Some((cached, left, right)) if *cached == side => (left.clone(), right.clone()),
+            _ => {
+                let left = corner_wedge_brush(gfx, side, false)?;
+                let right = corner_wedge_brush(gfx, side, true)?;
+                self.corner_brushes = Some((side, left.clone(), right.clone()));
+                (left, right)
+            }
+        };
+        let c = &gfx.compositor;
+        let r = side as f32;
+        add_visual(c, layers, &left_brush.cast()?, 0.0, 0.0, r, r)?;
+        add_visual(
+            c,
+            layers,
+            &right_brush.cast()?,
+            (screen_width - r).max(0.0),
+            0.0,
+            r,
+            r,
+        )?;
         Ok(())
     }
 
@@ -5776,6 +6146,42 @@ impl IslandGeometry {
     }
 }
 
+
+fn app_menu_height(kind: AppMenuKind) -> f32 {
+    match kind {
+        AppMenuKind::App => 121.0,
+        AppMenuKind::File => 80.0,
+        AppMenuKind::Window => 151.0,
+    }
+}
+
+fn corner_wedge_brush(
+    gfx: &Gfx,
+    side: u32,
+    right_side: bool,
+) -> Result<CompositionSurfaceBrush> {
+    let r = side as f32;
+    let cx = if right_side { 0.0 } else { r };
+    let cy = r;
+    let mut bgra = Vec::with_capacity((side * side * 4) as usize);
+    for y in 0..side {
+        let dy = (y as f32 + 0.5) - cy;
+        for x in 0..side {
+            let dx = (x as f32 + 0.5) - cx;
+            let dist = dx.hypot(dy);
+            let alpha = ((dist - (r - 0.5)).clamp(0.0, 1.0) * 255.0).round() as u8;
+            bgra.extend_from_slice(&[0, 0, 0, alpha]);
+        }
+    }
+    let image = nosih_shell::icons::IconImage {
+        width: side,
+        height: side,
+        bgra,
+    };
+    let surface = gfx.image_surface(&image)?;
+    Ok(gfx.compositor.CreateSurfaceBrushWithSurface(&surface)?)
+}
+
 fn toggle_panel(open: Option<Island>, clicked: Island) -> Option<Island> {
     (open != Some(clicked)).then_some(clicked)
 }
@@ -5789,7 +6195,7 @@ fn available_panel(
     open.filter(|island| match island {
         Island::Music => music,
         Island::Usage => usage,
-        Island::ControlCenter | Island::Notifications | Island::SystemMenu => true,
+        Island::ControlCenter | Island::Notifications | Island::SystemMenu | Island::AppMenu(_) => true,
         Island::NotificationBanner => banner,
     })
 }

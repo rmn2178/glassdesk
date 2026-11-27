@@ -52,14 +52,15 @@ pub struct Theme {
     indicator: Color,
 }
 
-/// Highlights at opposing edges and a quiet centre approximate curved glass.
-/// These compositor stops are allocated only when a surface is built.
+/// macOS Tahoe 26 Liquid Glass optical coating: crisp upper Fresnel meniscus,
+/// crystal-clear refractive centre, subtle glass-depth absorption, and lower
+/// internal caustic bounce. Allocated only when a surface is built.
 const LENS_COATING: [(f32, Color); 5] = [
-    (0.0, rgba(255, 255, 255, 76)),
-    (0.22, rgba(255, 255, 255, 12)),
+    (0.0, rgba(255, 255, 255, 96)),
+    (0.18, rgba(255, 255, 255, 18)),
     (0.48, rgba(255, 255, 255, 0)),
-    (0.76, rgba(0, 0, 0, 24)),
-    (1.0, rgba(255, 255, 255, 48)),
+    (0.78, rgba(0, 0, 0, 26)),
+    (1.0, rgba(255, 255, 255, 64)),
 ];
 
 impl Theme {
@@ -79,9 +80,9 @@ impl Theme {
             (Material::Frosted, false) => pick(rgba(34, 38, 46, 144), rgba(40, 44, 52, 255)),
             (Material::Clear, _) => pick(rgba(255, 255, 255, 14), rgba(38, 40, 46, 255)),
             (Material::LiquidGlass, true) => {
-                pick(rgba(245, 249, 255, 36), rgba(230, 234, 240, 255))
+                pick(rgba(248, 251, 255, 28), rgba(230, 234, 240, 255))
             }
-            (Material::LiquidGlass, false) => pick(rgba(22, 28, 38, 68), rgba(34, 40, 50, 255)),
+            (Material::LiquidGlass, false) => pick(rgba(18, 24, 34, 54), rgba(34, 40, 50, 255)),
         };
         let (sheen, rim) = match (material, light) {
             (Material::Standard, _) => (38, [150, 40, 30, 105]),
@@ -90,8 +91,8 @@ impl Theme {
             // All the light is on the edge, like a lens.
             (Material::Clear, _) => (56, [235, 80, 60, 190]),
             (Material::LiquidGlass, _) if !glass => (0, [100, 30, 25, 70]),
-            (Material::LiquidGlass, true) => (76, [245, 95, 25, 220]),
-            (Material::LiquidGlass, false) => (60, [220, 70, 20, 185]),
+            (Material::LiquidGlass, true) => (88, [255, 110, 32, 238]),
+            (Material::LiquidGlass, false) => (72, [235, 84, 24, 205]),
         };
         let panel_tint = match material {
             // Text-bearing panels keep a denser surface than the icon-only
@@ -140,9 +141,9 @@ impl Theme {
             (Material::Frosted, false) => pick(rgba(28, 32, 40, 184), rgba(38, 42, 50, 255)),
             (Material::Clear, _) => pick(rgba(0, 0, 0, 38), rgba(30, 32, 38, 255)),
             (Material::LiquidGlass, true) => {
-                pick(rgba(245, 249, 255, 112), rgba(236, 240, 246, 255))
+                pick(rgba(248, 251, 255, 44), rgba(236, 240, 246, 255))
             }
-            (Material::LiquidGlass, false) => pick(rgba(22, 28, 38, 136), rgba(30, 36, 46, 255)),
+            (Material::LiquidGlass, false) => pick(rgba(18, 24, 34, 56), rgba(30, 36, 46, 255)),
         };
         Self {
             tint,
@@ -232,6 +233,10 @@ impl Theme {
         material
             .rim_geometry
             .SetSize(v2(size.X - stroke, size.Y - stroke))?;
+        if let Some(inner) = &material.inner_rim_geometry {
+            let inset = stroke * 3.0;
+            inner.SetSize(v2((size.X - inset).max(0.0), (size.Y - inset).max(0.0)))?;
+        }
         let root = gfx.compositor.CreateContainerVisual()?;
         root.SetSize(size)?;
         root.Children()?.InsertAtTop(&material.glass)?;
@@ -247,6 +252,7 @@ struct GlassSurface {
     outline: CompositionRoundedRectangleGeometry,
     rim: ShapeVisual,
     rim_geometry: CompositionRoundedRectangleGeometry,
+    inner_rim_geometry: Option<CompositionRoundedRectangleGeometry>,
 }
 
 impl GlassSurface {
@@ -297,11 +303,36 @@ impl GlassSurface {
         rim_shape.SetStrokeThickness(stroke)?;
         let rim = c.CreateShapeVisual()?;
         rim.Shapes()?.Append(&rim_shape)?;
+        let inner_rim_geometry = if theme.lens {
+            // Concentric inner optical bevel lift (white 28% top -> clear -> 15% bottom caustic).
+            let inner_brush = c.CreateLinearGradientBrush()?;
+            let (start, end) = reflection_axis(edge);
+            inner_brush.SetStartPoint(start)?;
+            inner_brush.SetEndPoint(end)?;
+            let inner_stops = inner_brush.ColorStops()?;
+            for (at, alpha) in [(0.0, 72u8), (0.45, 0u8), (1.0, 38u8)] {
+                inner_stops.Append(
+                    &c.CreateColorGradientStopWithOffsetAndColor(at, rgba(255, 255, 255, alpha))?,
+                )?;
+            }
+            let inner_geo = c.CreateRoundedRectangleGeometry()?;
+            let inset = stroke * 1.5;
+            inner_geo.SetOffset(v2(inset, inset))?;
+            inner_geo.SetCornerRadius(v2((radius - inset).max(0.0), (radius - inset).max(0.0)))?;
+            let inner_shape = c.CreateSpriteShapeWithGeometry(&inner_geo)?;
+            inner_shape.SetStrokeBrush(&inner_brush)?;
+            inner_shape.SetStrokeThickness(stroke)?;
+            rim.Shapes()?.Append(&inner_shape)?;
+            Some(inner_geo)
+        } else {
+            None
+        };
         Ok(Self {
             glass,
             outline,
             rim,
             rim_geometry,
+            inner_rim_geometry,
         })
     }
 }
@@ -333,6 +364,40 @@ fn reflection_axis(edge: DockEdge) -> (Vector2, Vector2) {
         DockEdge::Left => (v2(1.0, 0.0), v2(0.0, 0.0)),
         DockEdge::Right => (v2(0.0, 0.0), v2(1.0, 0.0)),
     }
+}
+
+/// Precomputed 64×64 radial optical highlight for pointer-reactive Liquid Glass
+/// specular sheen on the dock (16 KB GPU texture, zero idle CPU overhead).
+fn specular_glint_brush(gfx: &Gfx, light: bool) -> Result<CompositionSurfaceBrush> {
+    const SIDE: u32 = 64;
+    let peak = if light { 84.0f32 } else { 68.0f32 };
+    let center = (SIDE as f32 - 1.0) / 2.0;
+    let inv_r = 1.0 / center;
+    let mut bgra = Vec::with_capacity((SIDE * SIDE * 4) as usize);
+    for y in 0..SIDE {
+        let dy = (y as f32 - center) * inv_r;
+        for x in 0..SIDE {
+            let dx = (x as f32 - center) * inv_r;
+            let r2 = dx * dx + dy * dy;
+            let alpha = if r2 >= 1.0 {
+                0u8
+            } else {
+                let falloff = (1.0 - r2) * (1.0 - r2);
+                (peak * falloff).round().clamp(0.0, 255.0) as u8
+            };
+            // Premultiplied white in BGRA.
+            bgra.extend_from_slice(&[alpha, alpha, alpha, alpha]);
+        }
+    }
+    let image = IconImage {
+        width: SIDE,
+        height: SIDE,
+        bgra,
+    };
+    let surface = gfx.image_surface(&image)?;
+    let brush = gfx.compositor.CreateSurfaceBrushWithSurface(&surface)?;
+    brush.SetStretch(CompositionStretch::Fill)?;
+    Ok(brush)
 }
 
 #[derive(Clone, Copy, Default)]
@@ -708,6 +773,9 @@ pub struct Scene {
     frames: [Visual; 3],
     outline: CompositionRoundedRectangleGeometry,
     rim_geometry: CompositionRoundedRectangleGeometry,
+    inner_rim_geometry: Option<CompositionRoundedRectangleGeometry>,
+    /// Pointer-reactive Liquid Glass specular highlight clipped inside `glass`.
+    glint: Option<SpriteVisual>,
     content: ContainerVisual,
     /// Frame drawn around the icon a dragged app would join.
     merge: ShapeVisual,
@@ -780,7 +848,20 @@ impl Scene {
             outline,
             rim,
             rim_geometry,
+            inner_rim_geometry,
         } = GlassSurface::build(gfx, theme, radius, stroke, frame.edge)?;
+        let glint = if theme.lens {
+            let brush = specular_glint_brush(gfx, theme.light)?;
+            let visual = c.CreateSpriteVisual()?;
+            let glint_size = layout.height * 2.2;
+            visual.SetSize(v2(glint_size, glint_size))?;
+            visual.SetBrush(&brush)?;
+            visual.SetOpacity(0.0)?;
+            glass.Children()?.InsertAtTop(&visual)?;
+            Some(visual)
+        } else {
+            None
+        };
         layers.InsertAtTop(&glass)?;
         layers.InsertAtTop(&rim)?;
 
@@ -866,6 +947,8 @@ impl Scene {
             frames: [shadow_host.cast()?, glass.cast()?, rim.cast()?],
             outline,
             rim_geometry,
+            inner_rim_geometry,
+            glint,
             content,
             merge,
             merge_geometry,
@@ -971,6 +1054,27 @@ impl Scene {
         self.outline.SetSize(size)?;
         self.rim_geometry
             .SetSize(v2(size.X - self.stroke, size.Y - self.stroke))?;
+        if let Some(inner) = &self.inner_rim_geometry {
+            let inset = self.stroke * 3.0;
+            inner.SetSize(v2((size.X - inset).max(0.0), (size.Y - inset).max(0.0)))?;
+        }
+        if let Some(glint) = &self.glint {
+            if let Some(rect) = hovered.and_then(|index| state.rects.get(index)) {
+                let target_rect = place(*rect);
+                let glint_size = self.height * 2.2;
+                let cx = target_rect.x + target_rect.width / 2.0 - plate.x;
+                let cy = target_rect.y + target_rect.height / 2.0 - plate.y;
+                let (gx, gy) = match self.frame.edge {
+                    DockEdge::Bottom => (cx - glint_size / 2.0, -glint_size * 0.42),
+                    DockEdge::Left => (plate.width - glint_size * 0.58, cy - glint_size / 2.0),
+                    DockEdge::Right => (-glint_size * 0.42, cy - glint_size / 2.0),
+                };
+                glint.SetOffset(v3(fit(gx), fit(gy)))?;
+                glint.SetOpacity(1.0)?;
+            } else {
+                glint.SetOpacity(0.0)?;
+            }
+        }
 
         for (index, rect) in state.rects.iter().enumerate() {
             let Rect {

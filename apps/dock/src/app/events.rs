@@ -9,14 +9,15 @@ use windows::Win32::{
     System::Ole::DROPEFFECT,
     UI::{
         Accessibility::HWINEVENTHOOK,
-        Input::KeyboardAndMouse::GetCapture,
+        Input::KeyboardAndMouse::{GetCapture, UnregisterHotKey},
         WindowsAndMessaging::{
             DefWindowProcW, EVENT_OBJECT_CLOAKED, EVENT_OBJECT_LOCATIONCHANGE,
             EVENT_OBJECT_UNCLOAKED, EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND,
             EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MOVESIZEEND, HMENU, KillTimer, MA_ACTIVATE,
             MA_NOACTIVATE, OBJID_WINDOW, PostMessageW, PostQuitMessage, SPI_SETDESKWALLPAPER,
             SetTimer, WM_CAPTURECHANGED, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED,
-            WM_DWMCOLORIZATIONCOLORCHANGED, WM_INITMENUPOPUP, WM_LBUTTONDOWN, WM_LBUTTONUP,
+            WM_DWMCOLORIZATIONCOLORCHANGED, WM_HOTKEY, WM_INITMENUPOPUP, WM_LBUTTONDOWN,
+            WM_LBUTTONUP,
             WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_RBUTTONUP,
             WM_SETTINGCHANGE, WM_THEMECHANGED, WM_TIMER, WM_WTSSESSION_CHANGE, WTS_SESSION_UNLOCK,
         },
@@ -32,7 +33,8 @@ use super::{
     HSHELL_REDRAW, HSHELL_RUDEAPPACTIVATED, HSHELL_WINDOWACTIVATED, HSHELL_WINDOWDESTROYED,
     LAST_FRONT, MASCOT_TIMER, Outside, PBT_APMPOWERSTATUSCHANGE, PBT_APMRESUMEAUTOMATIC,
     PBT_POWERSETTINGCHANGE, PINS_CHANGED, PINS_DELAY_MS, PINS_TIMER, PREVIEW_TIMER,
-    REFRESH_DELAY_MS, REFRESH_TIMER, SHELL_HOOK, SPI_SETWORKAREA, SPRING_TIMER, SWITCHER_TIMER,
+    REFRESH_DELAY_MS, REFRESH_TIMER, SHELL_HOOK, SPI_SETWORKAREA, SPOTLIGHT_HOTKEY_ID,
+    SPRING_TIMER, SWITCHER_TIMER,
     SYNC_DELAY_MS, SYNC_TIMER, TASKBAR_CREATED, TASKBAR_DELAY_MS, TASKBAR_PREFS_CHANGED,
     TASKBAR_TAKEN, TASKBAR_TIMER, TRIM_TIMER, UPDATE_TIMER, WELCOME_TIMER, WM_MOUSELEAVE,
     WM_POWERBROADCAST,
@@ -42,6 +44,9 @@ use super::{
 };
 
 const BACKDROP_REFRESH: u32 = windows::Win32::UI::WindowsAndMessaging::WM_APP + 11;
+const OPEN_SPOTLIGHT: u32 = windows::Win32::UI::WindowsAndMessaging::WM_APP + 13;
+const SHOW_HUD_VOLUME: u32 = windows::Win32::UI::WindowsAndMessaging::WM_APP + 14;
+const SHOW_HUD_BRIGHTNESS: u32 = windows::Win32::UI::WindowsAndMessaging::WM_APP + 15;
 static BACKDROP_PENDING: AtomicBool = AtomicBool::new(false);
 
 fn queue_backdrop_refresh(hwnd: HWND) {
@@ -122,6 +127,9 @@ pub(super) fn with_app_value<T: Default>(
 
 pub fn menu_bar_clicked(x: f32, y: f32) {
     with_app_then("barra superior", |app| {
+        if let Some(spotlight) = &mut app.spotlight {
+            let _ = spotlight.close();
+        }
         if let Some(bar) = &mut app.menubar {
             if let Some(anchor) = bar.input_switcher_anchor(x, y) {
                 bar.dismiss_island(&app.gfx)?;
@@ -191,6 +199,137 @@ pub fn menu_bar_notifications_changed() {
 pub fn menu_bar_notification_banner_timeout() {
     with_app("banner de notificación", |app| match &mut app.menubar {
         Some(bar) => bar.notification_banner_timeout(&app.gfx),
+        None => Ok(()),
+    });
+}
+
+pub fn open_spotlight() {
+    let target = main_window();
+    if target.0.is_null() {
+        return;
+    }
+    // SAFETY: Payload-free message posted to our own UI window so callers
+    // inside `with_app` (such as MenuBar::click) never re-borrow `APP`.
+    unsafe {
+        let _ = PostMessageW(Some(target), OPEN_SPOTLIGHT, WPARAM(0), LPARAM(0));
+    }
+}
+
+fn handle_open_spotlight() {
+    with_app("spotlight", |app| {
+        if !app.config.spotlight_search {
+            return Ok(());
+        }
+        if let Some(bar) = &mut app.menubar {
+            bar.dismiss_island(&app.gfx)?;
+        }
+        if app.spotlight.is_none() {
+            app.spotlight = Some(crate::spotlight::Spotlight::new(&app.gfx)?);
+        }
+        if let Some(spotlight) = &mut app.spotlight {
+            spotlight.toggle(&app.gfx)?;
+        }
+        Ok(())
+    });
+}
+
+fn run_spotlight_entry(entry: nosih_shell::spotlight::Entry) {
+    if matches!(entry.kind, nosih_shell::spotlight::EntryKind::Math { .. }) {
+        nosih_shell::spotlight::execute(&entry);
+    } else {
+        let _ = std::thread::Builder::new()
+            .name("nosih-spotlight-exec".into())
+            .spawn(move || nosih_shell::spotlight::execute(&entry));
+    }
+}
+
+pub fn spotlight_char(ch: char) {
+    let chosen = with_app_value("spotlight", |app| match &mut app.spotlight {
+        Some(spotlight) => spotlight.on_char(&app.gfx, ch),
+        None => Ok(None),
+    });
+    if let Some(entry) = chosen {
+        run_spotlight_entry(entry);
+    }
+}
+
+pub fn spotlight_key_down(vk: u16) {
+    let chosen = with_app_value("spotlight", |app| match &mut app.spotlight {
+        Some(spotlight) => spotlight.on_key_down(&app.gfx, vk),
+        None => Ok(None),
+    });
+    if let Some(entry) = chosen {
+        run_spotlight_entry(entry);
+    }
+}
+
+pub fn spotlight_click(x: f32, y: f32) {
+    let chosen = with_app_value("spotlight", |app| match &mut app.spotlight {
+        Some(spotlight) => spotlight.on_click(&app.gfx, x, y),
+        None => Ok(None),
+    });
+    if let Some(entry) = chosen {
+        run_spotlight_entry(entry);
+    }
+}
+
+pub fn spotlight_deactivate() {
+    with_app("spotlight", |app| match &mut app.spotlight {
+        Some(spotlight) => spotlight.on_deactivate(),
+        None => Ok(()),
+    });
+}
+
+pub fn show_hud_volume(percent: u8, muted: bool) {
+    let target = main_window();
+    if target.0.is_null() {
+        return;
+    }
+    // SAFETY: Posted to our own UI window so MenuBar audio callbacks never re-borrow `APP`.
+    unsafe {
+        let _ = PostMessageW(
+            Some(target),
+            SHOW_HUD_VOLUME,
+            WPARAM(usize::from(percent)),
+            LPARAM(isize::from(muted)),
+        );
+    }
+}
+
+pub fn show_hud_brightness(percent: u8) {
+    let target = main_window();
+    if target.0.is_null() {
+        return;
+    }
+    // SAFETY: Posted to our own UI window so Control Center callbacks never re-borrow `APP`.
+    unsafe {
+        let _ = PostMessageW(
+            Some(target),
+            SHOW_HUD_BRIGHTNESS,
+            WPARAM(usize::from(percent)),
+            LPARAM(0),
+        );
+    }
+}
+
+fn handle_show_hud(kind: crate::hud::Kind) {
+    with_app("hud", |app| {
+        if !app.config.native_hud {
+            return Ok(());
+        }
+        if app.hud.is_none() {
+            app.hud = Some(crate::hud::Hud::new(&app.gfx)?);
+        }
+        if let Some(hud) = &mut app.hud {
+            hud.show(&app.gfx, kind)?;
+        }
+        Ok(())
+    });
+}
+
+pub fn hud_timeout() {
+    with_app("hud", |app| match &mut app.hud {
+        Some(hud) => hud.on_timer(),
         None => Ok(()),
     });
 }
@@ -566,6 +705,9 @@ pub(super) unsafe extern "system" fn wndproc(
                     power::power_setting_changed(l);
                 }
             }
+            if let Some(pct) = power::take_brightness_change() {
+                show_hud_brightness(pct);
+            }
             // SAFETY: `hwnd` is our window; scheduling the same timer resets it.
             unsafe { SetTimer(Some(hwnd), REFRESH_TIMER, REFRESH_DELAY_MS, None) };
         }
@@ -698,8 +840,29 @@ pub(super) unsafe extern "system" fn wndproc(
         }
         // A folder's submenu in the shortcuts folder's menu is about to open.
         WM_INITMENUPOPUP if folder_menu::init_popup(HMENU(w.0 as *mut _)) => {}
+        WM_HOTKEY if w.0 as i32 == SPOTLIGHT_HOTKEY_ID => {
+            handle_open_spotlight();
+        }
+        OPEN_SPOTLIGHT => {
+            handle_open_spotlight();
+        }
+        SHOW_HUD_VOLUME => {
+            handle_show_hud(crate::hud::Kind::Volume {
+                percent: (w.0.min(100)) as u8,
+                muted: l.0 != 0,
+            });
+        }
+        SHOW_HUD_BRIGHTNESS => {
+            handle_show_hud(crate::hud::Kind::Brightness {
+                percent: (w.0.min(100)) as u8,
+            });
+        }
         WM_DESTROY => {
-            unsafe { PostQuitMessage(0) };
+            // SAFETY: Unregisters our own Spotlight hotkey before posting quit.
+            unsafe {
+                let _ = UnregisterHotKey(Some(hwnd), SPOTLIGHT_HOTKEY_ID);
+                PostQuitMessage(0);
+            }
         }
         _ if SHELL_HOOK.get() == Some(&msg) => match w.0 {
             // Changing the foreground window does not change the app list; it

@@ -182,5 +182,13 @@
   "menuBarControlCenter": "Central de Controle estilo macOS",
   "menuBarControlCenterHint": "Controle Wi-Fi, Bluetooth, brilho, volume e modo de energia direto do Nosih",
   "menuBarNativeNotifications": "Notificações estilo macOS",
-  "menuBarNativeNotificationsHint": "Exibir banners de vidro e a Central de Notificações com calendário do Nosih"
+  "menuBarNativeNotificationsHint": "Exibir banners de vidro e a Central de Notificações com calendário do Nosih",
+  "spotlightSearch": "Busca Spotlight",
+  "spotlightSearchHint": "Pesquise rapidamente aplicativos, comandos e cálculos com um lançador no estilo macOS.",
+  "nativeHud": "Indicador de volume e brilho",
+  "nativeHudHint": "Mostra uma sobreposição translúcida no estilo macOS ao ajustar o volume ou o brilho.",
+  "menuBarAppMenus": "Menus do app ativo",
+  "menuBarAppMenusHint": "Mostra o nome do aplicativo ativo e os menus Arquivo e Janela na barra de menus.",
+  "roundedScreenCorners": "Cantos da tela arredondados",
+  "roundedScreenCornersHint": "Adiciona cantos sutilmente arredondados na parte superior da tela, como no macOS."
 }

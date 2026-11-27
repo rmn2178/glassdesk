@@ -182,5 +182,13 @@
   "menuBarControlCenter": "macOS 风格控制中心",
   "menuBarControlCenterHint": "直接从 Nosih 控制 Wi-Fi、蓝牙、亮度、音量和电源模式",
   "menuBarNativeNotifications": "macOS 风格通知中心",
-  "menuBarNativeNotificationsHint": "使用 Nosih 玻璃通知横幅和带日历的通知中心"
+  "menuBarNativeNotificationsHint": "使用 Nosih 玻璃通知横幅和带日历的通知中心",
+  "spotlightSearch": "聚焦搜索",
+  "spotlightSearchHint": "使用 macOS 风格启动器快速搜索应用、系统命令和数学计算。",
+  "nativeHud": "音量与亮度浮层",
+  "nativeHudHint": "调节音量或屏幕亮度时显示 macOS 风格的半透明提示浮层。",
+  "menuBarAppMenus": "当前应用菜单",
+  "menuBarAppMenusHint": "在菜单栏中显示当前应用名称以及“文件”和“窗口”菜单。",
+  "roundedScreenCorners": "屏幕顶部圆角",
+  "roundedScreenCornersHint": "在屏幕顶部边缘呈现柔和的圆角效果，如同 macOS。"
 }

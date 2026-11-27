@@ -76,11 +76,13 @@ use crate::{
     flight::{Flight, Snapshot},
     gfx::{Gfx, LabelBrush},
     group_view::{DragGhost, GroupView},
+    hud::Hud,
     mascot,
     menu::{self, MenuItem},
     menubar::MenuBar,
     multi_window_view::MultiWindowView,
     scene::Scene,
+    spotlight::Spotlight,
     thumbnails::Thumbnails,
 };
 
@@ -88,16 +90,18 @@ use menus::run_outside;
 
 pub use events::{
     drag_enter, drag_leave, drag_over, drop_files, group_view_menu, group_view_moved,
-    group_view_press, group_view_press_lost, group_view_release, group_view_tick,
+    group_view_press, group_view_press_lost, group_view_release, group_view_tick, hud_timeout,
     menu_bar_accessories_changed, menu_bar_accessories_reset, menu_bar_audio_changed,
     menu_bar_bluetooth_changed, menu_bar_brightness_flush, menu_bar_check_pointer,
     menu_bar_clicked, menu_bar_control_center_changed, menu_bar_dismiss_island,
-    menu_bar_notification_banner_timeout, menu_bar_notifications_changed,
-    menu_bar_finish_hide, menu_bar_media_changed, menu_bar_monitor_tick, menu_bar_pointer_moved,
+    menu_bar_finish_hide, menu_bar_media_changed, menu_bar_monitor_tick,
+    menu_bar_notification_banner_timeout, menu_bar_notifications_changed, menu_bar_pointer_moved,
     menu_bar_progress_tick, menu_bar_registry_changed, menu_bar_scrolled, menu_bar_tick,
     menu_bar_volume_flush, menu_bar_volume_press, menu_bar_volume_release,
     multi_window_view_dismiss, multi_window_view_middle_click, multi_window_view_press,
-    multi_window_view_release, multi_window_view_scroll, multi_window_view_tick,
+    multi_window_view_release, multi_window_view_scroll, multi_window_view_tick, open_spotlight,
+    show_hud_brightness, show_hud_volume, spotlight_char, spotlight_click, spotlight_deactivate,
+    spotlight_key_down,
 };
 pub(crate) use input::primary_button_down;
 pub use lifecycle::{request_quit, run};
@@ -123,6 +127,7 @@ const PBT_APMPOWERSTATUSCHANGE: usize = 0x000A;
 const PBT_POWERSETTINGCHANGE: usize = 0x8013;
 
 const WINDOW_CLASS: PCWSTR = nosih_shell::dock_link::DOCK_WINDOW_CLASS;
+pub(super) const SPOTLIGHT_HOTKEY_ID: i32 = 1;
 const APPBAR_CALLBACK: u32 = WM_APP + 1;
 const TASKBAR_TAKEN: u32 = WM_APP + 2;
 const BIN_CHANGED: u32 = WM_APP + 3;
@@ -736,6 +741,8 @@ pub(crate) struct App {
     /// What the windows minimized with the genie looked like, oldest first.
     snapshots: Vec<(isize, Snapshot)>,
     menubar: Option<MenuBar>,
+    spotlight: Option<Spotlight>,
+    hud: Option<Hud>,
     edge_watch: Option<EdgeWatch>,
     /// Screen point identifying the last display chosen by a bottom-edge dwell.
     dock_display: Option<POINT>,

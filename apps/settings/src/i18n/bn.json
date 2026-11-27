@@ -182,5 +182,13 @@
   "menuBarControlCenter": "macOS-স্টাইল কন্ট্রোল সেন্টার",
   "menuBarControlCenterHint": "Nosih থেকেই Wi-Fi, ব্লুটুথ, উজ্জ্বলতা, ভলিউম ও পাওয়ার মোড নিয়ন্ত্রণ করুন",
   "menuBarNativeNotifications": "macOS-স্টাইল বিজ্ঞপ্তি",
-  "menuBarNativeNotificationsHint": "Nosih-এর গ্লাস ব্যানার এবং ক্যালেন্ডারসহ বিজ্ঞপ্তি কেন্দ্র দেখান"
+  "menuBarNativeNotificationsHint": "Nosih-এর গ্লাস ব্যানার এবং ক্যালেন্ডারসহ বিজ্ঞপ্তি কেন্দ্র দেখান",
+  "spotlightSearch": "স্পটলাইট অনুসন্ধান",
+  "spotlightSearchHint": "macOS-ধাঁচের লঞ্চার দিয়ে দ্রুত অ্যাপ, কমান্ড এবং গণিতের হিসাব খুঁজুন।",
+  "nativeHud": "ভলিউম ও উজ্জ্বলতা HUD",
+  "nativeHudHint": "ভলিউম বা স্ক্রিনের উজ্জ্বলতা পরিবর্তনের সময় macOS-ধাঁচের স্বচ্ছ ওভারলে দেখান।",
+  "menuBarAppMenus": "সক্রিয় অ্যাপ মেনু",
+  "menuBarAppMenusHint": "মেনু বারে সক্রিয় অ্যাপের নাম এবং ফাইল ও উইন্ডো মেনু দেখান।",
+  "roundedScreenCorners": "গোলাকার স্ক্রিন কোণ",
+  "roundedScreenCornersHint": "macOS-এর মতো ডিসপ্লের উপরের প্রান্তে সূক্ষ্ম গোলাকার কোণ যোগ করুন।"
 }

@@ -46,6 +46,14 @@ export interface Config {
   menuBarControlCenter?: boolean;
   /** Use Nosih's native macOS-style Notification Center and pop-up banners. */
   menuBarNativeNotifications?: boolean;
+  /** Global macOS-style Spotlight Search launcher. */
+  spotlightSearch?: boolean;
+  /** Native macOS-style HUD overlay for volume and brightness changes. */
+  nativeHud?: boolean;
+  /** Active application menus in the menu bar. */
+  menuBarAppMenus?: boolean;
+  /** Subtle rounded corners at the top of the screen. */
+  roundedScreenCorners?: boolean;
   /** What the clock opens (an app, shortcut or URI); null for the notification center. */
   menuBarClockTarget: string | null;
   accessoryBattery: boolean;

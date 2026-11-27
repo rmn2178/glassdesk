@@ -695,6 +695,13 @@ export function App() {
                     onChange={(menuBarNativeNotifications) => update({ menuBarNativeNotifications })}
                   />
                 </SubRow>
+                <SubRow label={t.menuBarAppMenus} hint={t.menuBarAppMenusHint} open={config.menuBar}>
+                  <Toggle
+                    label={t.menuBarAppMenus}
+                    checked={config.menuBarAppMenus ?? true}
+                    onChange={(menuBarAppMenus) => update({ menuBarAppMenus })}
+                  />
+                </SubRow>
                 <SubRow label={t.menuBarNotifications} hint={t.menuBarNotificationsHint} open={config.menuBar}>
                   <Toggle
                     label={t.menuBarNotifications}
@@ -714,6 +721,29 @@ export function App() {
                     </button>
                   </div>
                 </SubRow>
+              </Card>
+              <Card>
+                <Row label={t.spotlightSearch} hint={t.spotlightSearchHint}>
+                  <Toggle
+                    label={t.spotlightSearch}
+                    checked={config.spotlightSearch ?? true}
+                    onChange={(spotlightSearch) => update({ spotlightSearch })}
+                  />
+                </Row>
+                <Row label={t.nativeHud} hint={t.nativeHudHint}>
+                  <Toggle
+                    label={t.nativeHud}
+                    checked={config.nativeHud ?? true}
+                    onChange={(nativeHud) => update({ nativeHud })}
+                  />
+                </Row>
+                <Row label={t.roundedScreenCorners} hint={t.roundedScreenCornersHint}>
+                  <Toggle
+                    label={t.roundedScreenCorners}
+                    checked={config.roundedScreenCorners ?? true}
+                    onChange={(roundedScreenCorners) => update({ roundedScreenCorners })}
+                  />
+                </Row>
               </Card>
             </>
           ) : (

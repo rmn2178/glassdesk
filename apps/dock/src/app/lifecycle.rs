@@ -36,6 +36,7 @@ use windows::{
                 EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MOVESIZEEND,
                 FindWindowW, GetMessageW, IDC_ARROW, KillTimer, LoadCursorW, MSG, PM_REMOVE,
                 PeekMessageW, PostMessageW, RegisterClassW, RegisterShellHookWindow,
+                TranslateMessage,
                 RegisterWindowMessageW, SetTimer, WINDOW_EX_STYLE, WINEVENT_OUTOFCONTEXT,
                 WINEVENT_SKIPOWNPROCESS, WM_CLOSE, WM_QUIT, WNDCLASSW, WS_EX_LAYERED,
                 WS_EX_NOACTIVATE, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
@@ -127,6 +128,7 @@ pub(super) fn message_loop() {
                     if msg.message == WM_QUIT {
                         return;
                     }
+                    let _ = TranslateMessage(&msg);
                     DispatchMessageW(&msg);
                 }
                 with_app_then("animación", App::tick);
@@ -140,6 +142,7 @@ pub(super) fn message_loop() {
                     }
                     return;
                 }
+                let _ = TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
         }
@@ -262,6 +265,8 @@ pub fn run() -> Result<()> {
             flights: Vec::new(),
             snapshots: Vec::new(),
             menubar: None,
+            spotlight: None,
+            hud: None,
             edge_watch: None,
             dock_display: None,
             names: HashMap::new(),
@@ -408,6 +413,10 @@ pub fn run() -> Result<()> {
     crate::overlays::stop();
     // SAFETY: The drop target was registered on this window in this thread.
     unsafe {
+        let _ = windows::Win32::UI::Input::KeyboardAndMouse::UnregisterHotKey(
+            Some(main_window()),
+            super::SPOTLIGHT_HOTKEY_ID,
+        );
         let _ = RevokeDragDrop(HWND(DROP_WINDOW.load(Ordering::Relaxed) as *mut _));
         let _ =
             WTSUnRegisterSessionNotification(HWND(DROP_WINDOW.load(Ordering::Relaxed) as *mut _));

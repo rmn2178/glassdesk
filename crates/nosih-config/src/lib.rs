@@ -110,6 +110,14 @@ pub struct Config {
     pub menu_bar_control_center: bool,
     /// Use Nosih's native macOS-style Notification Center and pop-up banners instead of Windows'.
     pub menu_bar_native_notifications: bool,
+    /// Global macOS-style Spotlight Search launcher.
+    pub spotlight_search: bool,
+    /// Native macOS-style translucent HUD overlay for volume and brightness changes.
+    pub native_hud: bool,
+    /// Active application menus in the menu bar.
+    pub menu_bar_app_menus: bool,
+    /// Subtle rounded corners at the top edges of the screen, as on macOS.
+    pub rounded_screen_corners: bool,
     /// What clicking the clock opens: an app, a shortcut, a document or a URI
     /// (e.g. the Clock app or a calendar). `None` keeps the notification
     /// center and calendar, as on the Windows taskbar.
@@ -390,6 +398,10 @@ impl Default for Config {
             menu_bar_notifications: false,
             menu_bar_control_center: true,
             menu_bar_native_notifications: true,
+            spotlight_search: true,
+            native_hud: true,
+            menu_bar_app_menus: true,
+            rounded_screen_corners: true,
             menu_bar_system_monitor: false,
             menu_bar_clock_target: None,
             accessory_battery: false,
@@ -1149,6 +1161,36 @@ mod tests {
         assert_eq!(faster.genie_speed, GenieSpeed::Faster);
         assert!(GenieSpeed::Faster.seconds() < GenieSpeed::Fast.seconds());
         assert!(GenieSpeed::Fast.seconds() < GenieSpeed::Normal.seconds());
+    }
+
+    #[test]
+    fn macos_styling_features_default_to_true_and_round_trip() -> Result<(), serde_json::Error> {
+        let fresh = Config::default();
+        assert!(
+            fresh.spotlight_search
+                && fresh.native_hud
+                && fresh.menu_bar_app_menus
+                && fresh.rounded_screen_corners
+        );
+        let legacy: Config = serde_json::from_str("{}")?;
+        assert!(
+            legacy.spotlight_search
+                && legacy.native_hud
+                && legacy.menu_bar_app_menus
+                && legacy.rounded_screen_corners
+        );
+        let disabled: Config = serde_json::from_str(
+            r#"{"spotlightSearch":false,"nativeHud":false,"menuBarAppMenus":false,"roundedScreenCorners":false}"#,
+        )?;
+        assert!(
+            !disabled.spotlight_search
+                && !disabled.native_hud
+                && !disabled.menu_bar_app_menus
+                && !disabled.rounded_screen_corners
+        );
+        let restored: Config = serde_json::from_str(&serde_json::to_string(&disabled)?)?;
+        assert_eq!(restored, disabled);
+        Ok(())
     }
 
     #[test]

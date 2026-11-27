@@ -182,5 +182,13 @@
   "menuBarControlCenter": "مركز تحكم بأسلوب macOS",
   "menuBarControlCenterHint": "تحكم في Wi-Fi والبلوتوث والسطوع والصوت ووضع الطاقة مباشرة من Nosih",
   "menuBarNativeNotifications": "إشعارات بأسلوب macOS",
-  "menuBarNativeNotificationsHint": "عرض إشعارات Nosih الزجاجية ومركز الإشعارات مع التقويم"
+  "menuBarNativeNotificationsHint": "عرض إشعارات Nosih الزجاجية ومركز الإشعارات مع التقويم",
+  "spotlightSearch": "بحث Spotlight",
+  "spotlightSearchHint": "ابحث بسرعة عن التطبيقات والأوامر والعمليات الحسابية عبر مشغّل بأسلوب macOS.",
+  "nativeHud": "مؤشر الصوت والسطوع",
+  "nativeHudHint": "يعرض طبقة شفافة بأسلوب macOS عند تعديل مستوى الصوت أو سطوع الشاشة.",
+  "menuBarAppMenus": "قوائم التطبيق النشط",
+  "menuBarAppMenusHint": "يعرض اسم التطبيق النشط وقائمتي ملف ونافذة في شريط القوائم.",
+  "roundedScreenCorners": "زوايا شاشة دائرية",
+  "roundedScreenCornersHint": "يضيف زوايا دائرية ناعمة في الحافة العلوية للشاشة كما في macOS."
 }

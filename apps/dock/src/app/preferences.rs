@@ -207,6 +207,9 @@ impl App {
         }
         self.sync_thumbnails();
         self.apply_menu_bar_setting();
+        if let Some(spotlight) = &mut self.spotlight {
+            let _ = spotlight.on_theme_change(&self.gfx);
+        }
         self.update_menu_bar_app()?;
         self.calm_windows();
         self.refresh()?;
@@ -319,7 +322,22 @@ impl App {
             system_monitor: self.config.menu_bar_system_monitor,
             control_center: self.config.menu_bar_control_center,
             native_notifications: self.config.menu_bar_native_notifications,
+            spotlight_search: self.config.spotlight_search,
+            native_hud: self.config.native_hud,
+            app_menus: self.config.menu_bar_app_menus,
+            rounded_corners: self.config.rounded_screen_corners,
         };
+        self.sync_spotlight_hotkey();
+        if !self.config.spotlight_search
+            && let Some(spotlight) = &mut self.spotlight
+        {
+            let _ = spotlight.close();
+        }
+        if !self.config.native_hud
+            && let Some(hud) = &mut self.hud
+        {
+            let _ = hud.hide();
+        }
         if !self.config.menu_bar {
             self.menubar = None;
         } else if self.menubar.is_none() {
@@ -375,9 +393,42 @@ impl App {
             self.names.insert(id.clone(), name);
         }
         let name = self.names.get(&id).map_or("", String::as_str);
+        let tracked_hwnds: Vec<isize> = self.windows.iter().map(|window| window.hwnd).collect();
+        let mut active_app_hwnds: Vec<isize> = self
+            .windows
+            .iter()
+            .filter(|window| window.app_id == id)
+            .map(|window| window.hwnd)
+            .collect();
+        if let Some(pos) = active_app_hwnds.iter().position(|&h| h == front) {
+            active_app_hwnds.swap(0, pos);
+        } else if front != 0 {
+            active_app_hwnds.insert(0, front);
+        }
         match &mut self.menubar {
-            Some(bar) => bar.set_app_name(&self.gfx, name),
+            Some(bar) => {
+                bar.set_window_context(front, id.clone(), active_app_hwnds, tracked_hwnds);
+                bar.set_app_name(&self.gfx, name)
+            }
             None => Ok(()),
+        }
+    }
+
+    pub(super) fn sync_spotlight_hotkey(&self) {
+        use windows::Win32::UI::Input::KeyboardAndMouse::{
+            MOD_ALT, MOD_NOREPEAT, RegisterHotKey, UnregisterHotKey, VK_SPACE,
+        };
+        // SAFETY: Registers or unregisters our own Alt+Space hotkey on the main dock window.
+        unsafe {
+            let _ = UnregisterHotKey(Some(self.visual), super::SPOTLIGHT_HOTKEY_ID);
+            if self.config.spotlight_search {
+                let _ = RegisterHotKey(
+                    Some(self.visual),
+                    super::SPOTLIGHT_HOTKEY_ID,
+                    MOD_ALT | MOD_NOREPEAT,
+                    u32::from(VK_SPACE.0),
+                );
+            }
         }
     }
 }

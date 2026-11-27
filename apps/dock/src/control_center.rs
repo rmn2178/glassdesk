@@ -294,11 +294,13 @@ fn run(
             Command::SetBrightness(first) => {
                 let (target, leftover) = coalesce_brightness(first, receiver);
                 deferred = leftover;
-                if shell_cc::set_display_brightness(target) {
-                    let mut next = snapshot_state(state);
-                    next.brightness = Some(target);
-                    publish(window, message, state, next);
-                }
+                let mut next = snapshot_state(state);
+                next.brightness = if shell_cc::set_display_brightness(target) {
+                    Some(target)
+                } else {
+                    shell_cc::display_brightness()
+                };
+                publish(window, message, state, next);
             }
             Command::CyclePowerMode => {
                 let target = shell_cc::power_mode().next();

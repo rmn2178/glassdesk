@@ -235,7 +235,9 @@ test("retired Windows status-item overrides expose no controls and create no sav
         texts[language].menuBarMusic, texts[language].aiUsage,
         texts[language].accessoryBattery, texts[language].menuBarSystemMonitor,
         texts[language].menuBarControlCenter, texts[language].menuBarNativeNotifications,
-        texts[language].menuBarNotifications]);
+        texts[language].menuBarAppMenus, texts[language].menuBarNotifications,
+        texts[language].spotlightSearch, texts[language].nativeHud,
+        texts[language].roundedScreenCorners]);
       view.fire(60);
       await settle();
       assert.deepEqual(view.calls, []);
@@ -645,4 +647,36 @@ test("language uses one dropdown and changing it preserves other preferences", a
       view.fire(60); await settle();
     }
   }
+});
+
+test("macOS styling toggles default to enabled and emit config updates", async () => {
+  const view = fixture("menubar", {
+    spotlightSearch: undefined,
+    nativeHud: undefined,
+    menuBarAppMenus: undefined,
+    roundedScreenCorners: undefined,
+  });
+  const checked = (label) => [...elements(view.body())]
+    .find((node) => node.props.label === label && "checked" in node.props).props.checked;
+  const unmount = await view.mount();
+  try {
+    for (const key of ["spotlightSearch", "nativeHud", "menuBarAppMenus", "roundedScreenCorners"]) {
+      assert.equal(checked(texts.en[key]), true, key);
+    }
+    view.change(texts.en.spotlightSearch, false);
+    view.change(texts.en.nativeHud, false);
+    view.change(texts.en.menuBarAppMenus, false);
+    view.change(texts.en.roundedScreenCorners, false);
+    view.fire(60);
+    await settle();
+    assert.deepEqual(view.calls, [{
+      spotlightSearch: false,
+      nativeHud: false,
+      menuBarAppMenus: false,
+      roundedScreenCorners: false,
+    }]);
+    for (const key of ["spotlightSearch", "nativeHud", "menuBarAppMenus", "roundedScreenCorners"]) {
+      assert.equal(checked(texts.en[key]), false, key);
+    }
+  } finally { unmount(); }
 });

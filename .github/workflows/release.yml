@@ -66,10 +66,11 @@ jobs:
           $sig = Get-ChildItem target/release/bundle/nsis/*-setup.exe.sig -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($sig) {
             Copy-Item $sig.FullName release-assets/Nosih-Setup.exe.sig -Force
-            $version = (Get-Content apps/settings/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+            $version = ((cargo metadata --format-version 1 --no-deps | ConvertFrom-Json).packages | Where-Object name -eq 'nosih-settings').version
+            if (-not $version) { throw 'Could not resolve nosih-settings version from Cargo metadata' }
             $manifest = [ordered]@{
               version   = $version
-              notes     = "Nosih v$version"
+              notes     = "https://github.com/$env:GITHUB_REPOSITORY/releases/tag/v$version"
               pub_date  = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
               platforms = [ordered]@{
                 "windows-x86_64" = [ordered]@{

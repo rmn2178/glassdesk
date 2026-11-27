@@ -182,5 +182,13 @@
   "menuBarControlCenter": "Centre de contrôle façon macOS",
   "menuBarControlCenterHint": "Contrôlez Wi-Fi, Bluetooth, luminosité, volume et alimentation depuis Nosih",
   "menuBarNativeNotifications": "Notifications façon macOS",
-  "menuBarNativeNotificationsHint": "Afficher les bannières et le centre de notifications avec calendrier de Nosih"
+  "menuBarNativeNotificationsHint": "Afficher les bannières et le centre de notifications avec calendrier de Nosih",
+  "spotlightSearch": "Recherche Spotlight",
+  "spotlightSearchHint": "Recherchez rapidement des applications, des commandes et des calculs avec un lanceur de style macOS.",
+  "nativeHud": "Indicateur de volume et luminosité",
+  "nativeHudHint": "Affiche un indicateur translucide de style macOS lors du réglage du volume ou de la luminosité.",
+  "menuBarAppMenus": "Menus de l'app active",
+  "menuBarAppMenusHint": "Affiche le nom de l'application active ainsi que les menus Fichier et Fenêtre dans la barre.",
+  "roundedScreenCorners": "Coins d'écran arrondis",
+  "roundedScreenCornersHint": "Ajoute des coins légèrement arrondis en haut de l'écran, comme sur macOS."
 }

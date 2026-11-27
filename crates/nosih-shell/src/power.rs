@@ -30,12 +30,31 @@ use windows::core::GUID;
 
 /// The newer notification distinguishes standard and high-savings modes.
 const GUID_ENERGY_SAVER_STATUS: GUID = GUID::from_u128(0x550e8400_e29b_41d4_a716_446655440000);
+/// `GUID_DEVICE_POWER_POLICY_VIDEO_BRIGHTNESS`: fires on hardware brightness keys and OS slider changes.
+const GUID_VIDEO_BRIGHTNESS: GUID = GUID::from_u128(0xaded5e82_b909_4619_9949_f5d71dac0bcb);
 const UNKNOWN: u8 = 0;
 const BATTERY_OFF: u8 = 1;
 const BATTERY_ON: u8 = 2;
 const ENERGY_OFF: u8 = 3;
 const ENERGY_ON: u8 = 4;
 static SAVER: SaverState = SaverState(AtomicU8::new(UNKNOWN));
+static BRIGHTNESS_LAST: AtomicU8 = AtomicU8::new(u8::MAX);
+static BRIGHTNESS_PENDING: AtomicU8 = AtomicU8::new(u8::MAX);
+
+fn record_brightness(value: u32) {
+    let pct = value.min(100) as u8;
+    let prev = BRIGHTNESS_LAST.swap(pct, Ordering::Relaxed);
+    if prev != u8::MAX && prev != pct {
+        BRIGHTNESS_PENDING.store(pct, Ordering::Relaxed);
+    }
+}
+
+/// Returns the latest hardware/OS display brightness percentage change, if any.
+#[must_use]
+pub fn take_brightness_change() -> Option<u8> {
+    let pct = BRIGHTNESS_PENDING.swap(u8::MAX, Ordering::Relaxed);
+    (pct <= 100).then_some(pct)
+}
 
 struct SaverState(AtomicU8);
 
@@ -81,7 +100,11 @@ pub(crate) fn notified_saver_state() -> Option<bool> {
 pub unsafe fn power_setting_changed(data: windows::Win32::Foundation::LPARAM) {
     // SAFETY: This function's caller guarantees the notification's lifetime.
     if let Some((setting, value)) = unsafe { saver_notification(data) } {
-        SAVER.update(setting, value);
+        if setting == GUID_VIDEO_BRIGHTNESS {
+            record_brightness(value);
+        } else {
+            SAVER.update(setting, value);
+        }
     }
 }
 
@@ -198,7 +221,11 @@ unsafe extern "system" fn saver_changed(
     if kind == PBT_POWERSETTINGCHANGE {
         // SAFETY: Windows supplies the setting payload for this callback only.
         if let Some((setting, value)) = unsafe { saver_notification(LPARAM(data as isize)) } {
-            SAVER.update(setting, value);
+            if setting == GUID_VIDEO_BRIGHTNESS {
+                record_brightness(value);
+            } else {
+                SAVER.update(setting, value);
+            }
             if !context.is_null() {
                 // Context is an HWND value, never a pointer into a window or
                 // Rust object. No COM, UI borrow or synchronous send here.
@@ -227,7 +254,11 @@ impl SaverWatch {
             },
             UI::WindowsAndMessaging::{DEVICE_NOTIFY_CALLBACK, DEVICE_NOTIFY_WINDOW_HANDLE},
         };
-        let handles = [GUID_ENERGY_SAVER_STATUS, GUID_POWER_SAVING_STATUS]
+        let handles = [
+            GUID_ENERGY_SAVER_STATUS,
+            GUID_POWER_SAVING_STATUS,
+            GUID_VIDEO_BRIGHTNESS,
+        ]
             .iter()
             .filter_map(|setting| {
                 let subscription = DEVICE_NOTIFY_SUBSCRIBE_PARAMETERS {
