@@ -562,6 +562,9 @@ impl App {
             elapsed < until
         });
         self.render()?;
+        if self.hovering {
+            self.aim_preview();
+        }
         Ok(restore.map(|hwnd| Outside::Activate(vec![hwnd])))
     }
 

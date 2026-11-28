@@ -218,9 +218,10 @@ unsafe extern "system" fn saver_changed(
             PBT_APMPOWERSTATUSCHANGE, PBT_POWERSETTINGCHANGE, PostMessageW, WM_POWERBROADCAST,
         },
     };
-    if kind == PBT_POWERSETTINGCHANGE {
+    if kind == PBT_POWERSETTINGCHANGE
         // SAFETY: Windows supplies the setting payload for this callback only.
-        if let Some((setting, value)) = unsafe { saver_notification(LPARAM(data as isize)) } {
+        && let Some((setting, value)) = unsafe { saver_notification(LPARAM(data as isize)) }
+    {
             if setting == GUID_VIDEO_BRIGHTNESS {
                 record_brightness(value);
             } else {
@@ -237,7 +238,6 @@ unsafe extern "system" fn saver_changed(
                         LPARAM(0),
                     );
                 }
-            }
         }
     }
     0

@@ -348,6 +348,8 @@ impl App {
                 self.close_group_view();
                 self.hovering = false;
                 self.amount = ElasticSpring::at(0.0, HOVER_OMEGA, HOVER_DAMPING);
+                self.press_scale = ElasticSpring::at(1.0, super::PRESS_OMEGA, super::PRESS_DAMPING);
+                self.press_index = None;
                 self.press = None;
                 self.drag = None;
                 self.ghost = None;

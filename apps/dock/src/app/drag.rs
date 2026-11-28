@@ -44,6 +44,12 @@ impl App {
             let threshold = unsafe { GetSystemMetrics(SM_CXDRAG) }.max(1);
             if (point.x - press.at.x).abs() > threshold || (point.y - press.at.y).abs() > threshold
             {
+                self.press_scale = nosih_core::spring::ElasticSpring::at(
+                    1.0,
+                    super::PRESS_OMEGA,
+                    super::PRESS_DAMPING,
+                );
+                self.press_index = None;
                 self.drag = Some(Dragging {
                     id: press.id.clone(),
                     point,
@@ -170,14 +176,26 @@ impl App {
             return Ok(());
         };
         let along = stage.to_dock(point).0;
+        let was_animating = self.is_animating();
         self.cursor = along;
-        self.cursor_spring.target = along;
         if !self.hovering {
             self.hovering = true;
+            self.cursor_spring = nosih_core::spring::ElasticSpring::at(
+                along,
+                super::CURSOR_OMEGA,
+                super::CURSOR_DAMPING,
+            );
             self.amount.target = 1.0;
             self.slide.target = 0.0;
-            self.last_frame = Instant::now();
+            if !was_animating {
+                self.last_frame = Instant::now();
+            }
             self.place_windows()?;
+        } else {
+            self.cursor_spring.target = along;
+            if !was_animating {
+                self.last_frame = Instant::now();
+            }
         }
         self.render()
     }
@@ -513,6 +531,10 @@ impl App {
     /// reached so far.
     pub(super) fn cancel_drag(&mut self) -> Result<()> {
         self.press = None;
+        if self.press_index.is_some() {
+            self.press_scale.target = 1.0;
+            self.last_frame = Instant::now();
+        }
         self.group_was_open = None;
         self.ghost = None;
         self.stop_drag_input();

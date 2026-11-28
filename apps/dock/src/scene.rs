@@ -310,31 +310,42 @@ impl GlassSurface {
             // like ybouane/liquidglass, rendered beneath the primary Fresnel rim.
             let cool_scale = if theme.light { 1.0f32 } else { 0.85f32 };
             let scale_a = |a: u8| (f32::from(a) * cool_scale).round().min(255.0) as u8;
-            let dispersion_passes: [(f32, Vector2, Vector2, [(f32, Color); 4]); 2] = [
-                (
-                    0.9,
-                    v2(0.0, 0.0),
-                    v2(1.0, 1.0),
-                    [
+            struct DispersionPass {
+                inset_mult: f32,
+                start: Vector2,
+                end: Vector2,
+                stops: [(f32, Color); 4],
+            }
+            let dispersion_passes = [
+                DispersionPass {
+                    inset_mult: 0.9,
+                    start: v2(0.0, 0.0),
+                    end: v2(1.0, 1.0),
+                    stops: [
                         (0.0, rgba(110, 215, 255, scale_a(135))),
                         (0.34, rgba(110, 215, 255, 0)),
                         (0.66, rgba(168, 132, 255, 0)),
                         (1.0, rgba(168, 132, 255, scale_a(115))),
                     ],
-                ),
-                (
-                    1.15,
-                    v2(1.0, 0.0),
-                    v2(0.0, 1.0),
-                    [
+                },
+                DispersionPass {
+                    inset_mult: 1.15,
+                    start: v2(1.0, 0.0),
+                    end: v2(0.0, 1.0),
+                    stops: [
                         (0.0, rgba(255, 158, 198, scale_a(112))),
                         (0.35, rgba(255, 158, 198, 0)),
                         (0.65, rgba(255, 218, 132, 0)),
                         (1.0, rgba(255, 218, 132, scale_a(108))),
                     ],
-                ),
+                },
             ];
-            for (inset_mult, start, end, stops_spec) in dispersion_passes {
+            for DispersionPass {
+                inset_mult,
+                start,
+                end,
+                stops: stops_spec,
+            } in dispersion_passes {
                 let brush = c.CreateLinearGradientBrush()?;
                 brush.SetStartPoint(start)?;
                 brush.SetEndPoint(end)?;
