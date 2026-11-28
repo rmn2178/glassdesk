@@ -13,6 +13,7 @@ use nosih_shell::{
 
 static SPOTLIGHT_OPEN: AtomicBool = AtomicBool::new(false);
 use windows::{
+    Foundation::TimeSpan,
     UI::{
         Color,
         Composition::{ContainerVisual, Desktop::DesktopWindowTarget},
@@ -35,7 +36,7 @@ use windows::{
             },
         },
     },
-    core::{BOOL, Interface, w},
+    core::{BOOL, Interface, h, w},
 };
 use windows_numerics::{Vector2, Vector3};
 
@@ -56,6 +57,9 @@ const MAX_RESULTS: usize = 7;
 const PANEL_RADIUS: f32 = 18.0;
 const ROW_INSET_X: f32 = 10.0;
 const ROW_RADIUS: f32 = 10.0;
+const PAD_X: f32 = 10.0;
+const PAD_TOP: f32 = 14.0;
+const PAD_BOTTOM: f32 = 10.0;
 
 /// Centered floating Liquid Glass Spotlight search overlay.
 pub struct Spotlight {
@@ -127,8 +131,10 @@ impl Spotlight {
                 .CreateDesktopWindowTarget(hwnd, true)?
         };
         system::set_window_transitions(hwnd.0 as isize, false);
+        let root = gfx.compositor.CreateContainerVisual()?;
         let surface = gfx.compositor.CreateContainerVisual()?;
-        target.SetRoot(&surface)?;
+        root.Children()?.InsertAtTop(&surface)?;
+        target.SetRoot(&root)?;
 
         Ok(Self {
             hwnd,
@@ -178,6 +184,7 @@ impl Spotlight {
         self.results.clear();
         self.selected = 0;
         self.surface.Children()?.RemoveAll()?;
+        self.reset_surface_transform(0.0, 0.0)?;
         // SAFETY: `self.hwnd` is our own live top-level popup window.
         unsafe {
             let _ = ShowWindow(self.hwnd, SW_HIDE);
@@ -243,11 +250,13 @@ impl Spotlight {
         if !self.open {
             return Ok(None);
         }
+        let local_x = x - (PAD_X * self.scale).round();
+        let local_y = y - (PAD_TOP * self.scale).round();
         let max_x = WIDTH * self.scale;
-        if x < 0.0 || x > max_x {
+        if local_x < 0.0 || local_x > max_x {
             return Ok(None);
         }
-        if let Some(index) = hit_test_row(y, self.scale, self.results.len()) {
+        if let Some(index) = hit_test_row(local_y, self.scale, self.results.len()) {
             self.selected = index;
             return self.take_selected();
         }
@@ -291,13 +300,27 @@ impl Spotlight {
         let logical_height = panel_logical_height(self.results.len(), has_query);
         let phys_w = px(WIDTH);
         let phys_h = px(logical_height);
+        let pad_x = px(PAD_X);
+        let pad_top = px(PAD_TOP);
+        let pad_bottom = px(PAD_BOTTOM);
+        let win_w = (phys_w + pad_x * 2.0) as i32;
+        let win_h = (phys_h + pad_top + pad_bottom) as i32;
 
-        let win_x = screen_left + ((screen_w - phys_w as i32) / 2);
-        let preferred_y = screen_top + ((screen_h as f32 * 0.22).round() as i32);
-        let max_y = (screen_top + screen_h - phys_h as i32).max(screen_top);
+        let win_x = screen_left + ((screen_w - phys_w as i32) / 2) - pad_x as i32;
+        let preferred_y = screen_top + ((screen_h as f32 * 0.22).round() as i32) - pad_top as i32;
+        let max_y = (screen_top + screen_h - win_h).max(screen_top);
         let win_y = preferred_y.clamp(screen_top, max_y);
 
         self.render_visuals(gfx, phys_w, phys_h, scale, has_query)?;
+        if show {
+            if system::animations_enabled() {
+                self.animate_entrance(gfx, phys_w, pad_x, pad_top, scale)?;
+            } else {
+                self.reset_surface_transform(pad_x, pad_top)?;
+            }
+        } else {
+            self.surface.SetOffset(Vector3::new(pad_x, pad_top, 0.0))?;
+        }
         let flags = if show {
             SWP_SHOWWINDOW
         } else {
@@ -310,8 +333,8 @@ impl Spotlight {
                 Some(HWND_TOPMOST),
                 win_x,
                 win_y,
-                phys_w as i32,
-                phys_h as i32,
+                win_w,
+                win_h,
                 flags,
             );
         }
@@ -489,6 +512,70 @@ impl Spotlight {
 
         content.SetOffset(Vector3::new(0.0, 0.0, 0.0))?;
         layers.InsertAtTop(&content)?;
+        Ok(())
+    }
+
+    fn animate_entrance(
+        &self,
+        gfx: &Gfx,
+        phys_w: f32,
+        base_x: f32,
+        base_y: f32,
+        scale: f32,
+    ) -> Result<()> {
+        let c = &gfx.compositor;
+        self.surface.SetOffset(Vector3::new(base_x, base_y, 0.0))?;
+        self.surface
+            .SetCenterPoint(Vector3::new(phys_w / 2.0, 0.0, 0.0))?;
+
+        let spring_ease =
+            c.CreateCubicBezierEasingFunction(Vector2::new(0.22, 1.0), Vector2::new(0.36, 1.0))?;
+        let settle_ease =
+            c.CreateCubicBezierEasingFunction(Vector2::new(0.3, 0.0), Vector2::new(0.2, 1.0))?;
+        let main_duration = TimeSpan {
+            Duration: 220 * 10_000,
+        };
+        let fade_duration = TimeSpan {
+            Duration: 150 * 10_000,
+        };
+
+        let scale_anim = c.CreateVector3KeyFrameAnimation()?;
+        scale_anim.SetDuration(main_duration)?;
+        scale_anim.InsertKeyFrame(0.0, Vector3::new(0.94, 0.94, 1.0))?;
+        scale_anim.InsertKeyFrameWithEasingFunction(
+            0.68,
+            Vector3::new(1.012, 1.012, 1.0),
+            &spring_ease,
+        )?;
+        scale_anim.InsertKeyFrameWithEasingFunction(
+            1.0,
+            Vector3::new(1.0, 1.0, 1.0),
+            &settle_ease,
+        )?;
+
+        let slide_anim = c.CreateScalarKeyFrameAnimation()?;
+        slide_anim.SetDuration(main_duration)?;
+        slide_anim.InsertKeyFrame(0.0, base_y - 12.0 * scale)?;
+        slide_anim.InsertKeyFrameWithEasingFunction(1.0, base_y, &spring_ease)?;
+
+        let fade_anim = c.CreateScalarKeyFrameAnimation()?;
+        fade_anim.SetDuration(fade_duration)?;
+        fade_anim.InsertKeyFrame(0.0, 0.0)?;
+        fade_anim.InsertKeyFrameWithEasingFunction(1.0, 1.0, &spring_ease)?;
+
+        self.surface.StartAnimation(h!("Scale"), &scale_anim)?;
+        self.surface.StartAnimation(h!("Offset.Y"), &slide_anim)?;
+        self.surface.StartAnimation(h!("Opacity"), &fade_anim)?;
+        Ok(())
+    }
+
+    fn reset_surface_transform(&self, base_x: f32, base_y: f32) -> Result<()> {
+        self.surface.StopAnimation(h!("Scale"))?;
+        self.surface.StopAnimation(h!("Offset.Y"))?;
+        self.surface.StopAnimation(h!("Opacity"))?;
+        self.surface.SetScale(Vector3::new(1.0, 1.0, 1.0))?;
+        self.surface.SetOffset(Vector3::new(base_x, base_y, 0.0))?;
+        self.surface.SetOpacity(1.0)?;
         Ok(())
     }
 }

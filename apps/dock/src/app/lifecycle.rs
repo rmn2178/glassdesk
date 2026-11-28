@@ -3,7 +3,11 @@
 use std::{collections::HashMap, env, sync::atomic::Ordering, thread, time::Instant};
 
 use anyhow::Result;
-use nosih_core::{attention::Attention, frame::DockEdge, spring::Spring};
+use nosih_core::{
+    attention::Attention,
+    frame::DockEdge,
+    spring::{ElasticSpring, Spring},
+};
 use nosih_shell::{
     appbar::AppBar,
     power,
@@ -51,7 +55,7 @@ use crate::{assets::Visuals, drop::DropTarget, gfx::Gfx, strings, thumbnails::Th
 
 use super::{
     APP, APPBAR_CALLBACK, ASSETS_READY, App, BIN_CHANGED, CLOAK_HOOK, CONFIG_CHANGED, DROP_WINDOW,
-    FOREGROUND_HOOK, HOVER_OMEGA, LAST_FRONT, LAUNCH_BOUNCE_LIMIT, LOCATION_HOOK, MAIN_WINDOW,
+    FOREGROUND_HOOK, CURSOR_DAMPING, CURSOR_OMEGA, HOVER_DAMPING, HOVER_OMEGA, PRESS_DAMPING, PRESS_OMEGA, LAST_FRONT, LAUNCH_BOUNCE_LIMIT, LOCATION_HOOK, MAIN_WINDOW,
     MAX_SNAPSHOTS, MINIMIZE_HOOK, MOVESIZE_HOOK, Outside, PINS_CHANGED, PreviewOrder, SHELL_HOOK,
     SYNC_DELAY_MS, SYNC_TIMER, TASKBAR_CREATED, TASKBAR_DELAY_MS, TASKBAR_MAX_ATTEMPTS,
     TASKBAR_PREFS_CHANGED, TASKBAR_TAKEN, TASKBAR_TIMER, UPDATE_AFTER_START, UPDATE_EVERY,
@@ -289,7 +293,10 @@ pub fn run() -> Result<()> {
             moments: crate::moments::Moments::default(),
             welcome_tries: 0,
             cursor: 0.0,
-            amount: Spring::at(0.0, HOVER_OMEGA),
+            cursor_spring: ElasticSpring::at(0.0, CURSOR_OMEGA, CURSOR_DAMPING),
+            amount: ElasticSpring::at(0.0, HOVER_OMEGA, HOVER_DAMPING),
+            press_scale: ElasticSpring::at(1.0, PRESS_OMEGA, PRESS_DAMPING),
+            press_index: None,
             last_frame: Instant::now(),
         };
         let _ = TASKBAR_CREATED.set(RegisterWindowMessageW(w!("TaskbarCreated")));
@@ -539,6 +546,11 @@ impl App {
         }
         let dt = now.duration_since(self.last_frame).as_secs_f32();
         self.amount.step(dt);
+        self.cursor_spring.step(dt);
+        self.press_scale.step(dt);
+        if self.press.is_none() && self.press_scale.is_settled() {
+            self.press_index = None;
+        }
         self.slide.step(dt);
         self.last_frame = now;
 
@@ -610,11 +622,13 @@ impl App {
 
     pub(super) fn is_animating(&self) -> bool {
         !self.amount.is_settled()
+            || !self.cursor_spring.is_settled()
+            || !self.press_scale.is_settled()
             || !self.slide.is_settled()
             || self
                 .stage
                 .as_ref()
-                .is_some_and(|stage| stage.reorder.is_some())
+                .is_some_and(|stage| stage.reorder.is_some() || stage.scene.is_glint_animating())
             || !self.bounces.is_empty()
             || !self.flights.is_empty()
     }

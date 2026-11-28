@@ -478,7 +478,9 @@ impl App {
         if self.hovering {
             return Ok(());
         }
-        self.cursor = slot.rect.x + slot.rect.width / 2.0;
+        let center = slot.rect.x + slot.rect.width / 2.0;
+        self.cursor = center;
+        self.cursor_spring.target = center;
         self.pointed = true;
         self.amount.target = 1.0;
         self.last_frame = Instant::now();

@@ -3,6 +3,7 @@
 use anyhow::Result;
 use nosih_shell::system;
 use windows::{
+    Foundation::TimeSpan,
     UI::{
         Color,
         Composition::{ContainerVisual, Desktop::DesktopWindowTarget},
@@ -22,7 +23,7 @@ use windows::{
             WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
         },
     },
-    core::{BOOL, Interface, w},
+    core::{BOOL, Interface, h, w},
 };
 use windows_numerics::{Vector2, Vector3};
 
@@ -39,6 +40,9 @@ const HEIGHT: f32 = 52.0;
 const BOTTOM_MARGIN: f32 = 96.0;
 const HIDE_TIMER_ID: usize = 1;
 const HIDE_DELAY_MS: u32 = 1_600;
+const PAD_X: f32 = 8.0;
+const PAD_TOP: f32 = 6.0;
+const PAD_BOTTOM: f32 = 18.0;
 
 /// Payload shown in the floating HUD pill.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -117,8 +121,10 @@ impl Hud {
                 .CreateDesktopWindowTarget(hwnd, true)?
         };
         system::set_window_transitions(hwnd.0 as isize, false);
+        let root = gfx.compositor.CreateContainerVisual()?;
         let surface = gfx.compositor.CreateContainerVisual()?;
-        target.SetRoot(&surface)?;
+        root.Children()?.InsertAtTop(&surface)?;
+        target.SetRoot(&root)?;
 
         Ok(Self {
             hwnd,
@@ -130,18 +136,33 @@ impl Hud {
 
     /// Renders and shows the HUD pill without activating it, arming a 1600ms auto-hide timer.
     pub fn show(&mut self, gfx: &Gfx, kind: Kind) -> Result<()> {
+        let first_pop_in = !self.visible;
         let (screen_left, screen_top, screen_w, screen_h, work_bottom, scale) =
             primary_screen_metrics();
         let px = |logical: f32| (logical * scale).round();
 
         let phys_w = px(WIDTH);
         let phys_h = px(HEIGHT);
-        let win_x = screen_left + ((screen_w - phys_w as i32) / 2);
-        let preferred_y = work_bottom - phys_h as i32 - px(BOTTOM_MARGIN) as i32;
-        let max_y = (screen_top + screen_h - phys_h as i32).max(screen_top);
+        let pad_x = px(PAD_X);
+        let pad_top = px(PAD_TOP);
+        let pad_bottom = px(PAD_BOTTOM);
+        let win_w = (phys_w + pad_x * 2.0) as i32;
+        let win_h = (phys_h + pad_top + pad_bottom) as i32;
+        let win_x = screen_left + ((screen_w - phys_w as i32) / 2) - pad_x as i32;
+        let preferred_y = work_bottom - phys_h as i32 - px(BOTTOM_MARGIN) as i32 - pad_top as i32;
+        let max_y = (screen_top + screen_h - win_h).max(screen_top);
         let win_y = preferred_y.clamp(screen_top, max_y);
 
         self.render_visuals(gfx, kind, phys_w, phys_h, scale)?;
+        if first_pop_in {
+            if system::animations_enabled() {
+                self.animate_entrance(gfx, phys_w, phys_h, pad_x, pad_top, scale)?;
+            } else {
+                self.reset_surface_transform(pad_x, pad_top)?;
+            }
+        } else {
+            self.surface.SetOffset(Vector3::new(pad_x, pad_top, 0.0))?;
+        }
 
         // SAFETY: `self.hwnd` is our own live click-through popup window.
         unsafe {
@@ -150,8 +171,8 @@ impl Hud {
                 Some(HWND_TOPMOST),
                 win_x,
                 win_y,
-                phys_w as i32,
-                phys_h as i32,
+                win_w,
+                win_h,
                 SWP_NOACTIVATE | SWP_SHOWWINDOW,
             );
             let _ = ShowWindow(self.hwnd, SW_SHOWNOACTIVATE);
@@ -170,6 +191,7 @@ impl Hud {
         }
         if self.visible {
             self.surface.Children()?.RemoveAll()?;
+            self.reset_surface_transform(0.0, 0.0)?;
             self.visible = false;
         }
         Ok(())
@@ -303,6 +325,71 @@ impl Hud {
 
         content.SetOffset(Vector3::new(0.0, 0.0, 0.0))?;
         layers.InsertAtTop(&content)?;
+        Ok(())
+    }
+
+    fn animate_entrance(
+        &self,
+        gfx: &Gfx,
+        phys_w: f32,
+        phys_h: f32,
+        base_x: f32,
+        base_y: f32,
+        scale: f32,
+    ) -> Result<()> {
+        let c = &gfx.compositor;
+        self.surface.SetOffset(Vector3::new(base_x, base_y, 0.0))?;
+        self.surface
+            .SetCenterPoint(Vector3::new(phys_w / 2.0, phys_h / 2.0, 0.0))?;
+
+        let spring_ease =
+            c.CreateCubicBezierEasingFunction(Vector2::new(0.22, 1.0), Vector2::new(0.36, 1.0))?;
+        let settle_ease =
+            c.CreateCubicBezierEasingFunction(Vector2::new(0.3, 0.0), Vector2::new(0.2, 1.0))?;
+        let main_duration = TimeSpan {
+            Duration: 200 * 10_000,
+        };
+        let fade_duration = TimeSpan {
+            Duration: 140 * 10_000,
+        };
+
+        let scale_anim = c.CreateVector3KeyFrameAnimation()?;
+        scale_anim.SetDuration(main_duration)?;
+        scale_anim.InsertKeyFrame(0.0, Vector3::new(0.88, 0.88, 1.0))?;
+        scale_anim.InsertKeyFrameWithEasingFunction(
+            0.68,
+            Vector3::new(1.02, 1.02, 1.0),
+            &spring_ease,
+        )?;
+        scale_anim.InsertKeyFrameWithEasingFunction(
+            1.0,
+            Vector3::new(1.0, 1.0, 1.0),
+            &settle_ease,
+        )?;
+
+        let slide_anim = c.CreateScalarKeyFrameAnimation()?;
+        slide_anim.SetDuration(main_duration)?;
+        slide_anim.InsertKeyFrame(0.0, base_y + 14.0 * scale)?;
+        slide_anim.InsertKeyFrameWithEasingFunction(1.0, base_y, &spring_ease)?;
+
+        let fade_anim = c.CreateScalarKeyFrameAnimation()?;
+        fade_anim.SetDuration(fade_duration)?;
+        fade_anim.InsertKeyFrame(0.0, 0.0)?;
+        fade_anim.InsertKeyFrameWithEasingFunction(1.0, 1.0, &spring_ease)?;
+
+        self.surface.StartAnimation(h!("Scale"), &scale_anim)?;
+        self.surface.StartAnimation(h!("Offset.Y"), &slide_anim)?;
+        self.surface.StartAnimation(h!("Opacity"), &fade_anim)?;
+        Ok(())
+    }
+
+    fn reset_surface_transform(&self, base_x: f32, base_y: f32) -> Result<()> {
+        self.surface.StopAnimation(h!("Scale"))?;
+        self.surface.StopAnimation(h!("Offset.Y"))?;
+        self.surface.StopAnimation(h!("Opacity"))?;
+        self.surface.SetScale(Vector3::new(1.0, 1.0, 1.0))?;
+        self.surface.SetOffset(Vector3::new(base_x, base_y, 0.0))?;
+        self.surface.SetOpacity(1.0)?;
         Ok(())
     }
 }

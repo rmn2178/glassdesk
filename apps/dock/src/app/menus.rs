@@ -203,7 +203,7 @@ impl App {
         let state = magnify(
             &stage.layout,
             self.cursor,
-            self.amount.value,
+            self.amount.value.max(0.0),
             &stage.magnifier,
         );
         let rect = state.rects.get(index)?;
@@ -254,7 +254,7 @@ impl App {
         let state = magnify(
             &stage.layout,
             self.cursor,
-            self.amount.value,
+            self.amount.value.max(0.0),
             &stage.magnifier,
         );
         let target_entry = self.hovered.and_then(|index| {

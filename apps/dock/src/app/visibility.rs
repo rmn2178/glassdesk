@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use anyhow::Result;
 use nosih_config::DockPosition;
-use nosih_core::{frame::DockEdge, layout::Rect, spring::Spring};
+use nosih_core::{frame::DockEdge, layout::Rect, spring::ElasticSpring};
 use nosih_shell::{
     appbar::ABN_FULLSCREENAPP,
     system::{Monitor, monitor_at, monitor_rects, primary_monitor},
@@ -25,7 +25,7 @@ use crate::{
 
 use super::{
     App, EDGE_TIMER, FULLSCREEN_RECHECK_MS, FULLSCREEN_TIMER, HIDE_DELAY_MS, HIDE_TIMER,
-    HOVER_OMEGA, millis,
+    HOVER_DAMPING, HOVER_OMEGA, millis,
 };
 
 pub(super) fn rects_overlap(a: RECT, b: RECT) -> bool {
@@ -228,7 +228,7 @@ impl App {
                 x: screen.left + (screen.right - screen.left) / 2,
                 y: screen.top + (screen.bottom - screen.top) / 2,
             });
-            self.amount = Spring::at(0.0, HOVER_OMEGA);
+            self.amount = ElasticSpring::at(0.0, HOVER_OMEGA, HOVER_DAMPING);
             self.slide = Spring::at(1.0, self.config.dock_auto_hide_speed.omega());
             self.fullscreen = false;
             self.refresh()?;
@@ -347,7 +347,7 @@ impl App {
                 self.close_preview();
                 self.close_group_view();
                 self.hovering = false;
-                self.amount = Spring::at(0.0, HOVER_OMEGA);
+                self.amount = ElasticSpring::at(0.0, HOVER_OMEGA, HOVER_DAMPING);
                 self.press = None;
                 self.drag = None;
                 self.ghost = None;

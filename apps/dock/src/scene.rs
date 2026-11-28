@@ -5,13 +5,14 @@
 #[path = "scene/material_tests.rs"]
 mod material_tests;
 
-use std::{cell::Cell, rc::Rc};
+use std::{cell::Cell, rc::Rc, time::Instant};
 
 use anyhow::Result;
 use nosih_core::{
     frame::{DockEdge, Frame as DockFrame},
     layout::{ItemKind, Layout, Rect},
     magnify::Magnified,
+    spring::ElasticSpring,
 };
 use windows::{
     UI::{
@@ -233,9 +234,9 @@ impl Theme {
         material
             .rim_geometry
             .SetSize(v2(size.X - stroke, size.Y - stroke))?;
-        if let Some(inner) = &material.inner_rim_geometry {
-            let inset = stroke * 3.0;
-            inner.SetSize(v2((size.X - inset).max(0.0), (size.Y - inset).max(0.0)))?;
+        for (inset_mult, geo) in &material.extra_rims {
+            let inset = stroke * inset_mult * 2.0;
+            geo.SetSize(v2((size.X - inset).max(0.0), (size.Y - inset).max(0.0)))?;
         }
         let root = gfx.compositor.CreateContainerVisual()?;
         root.SetSize(size)?;
@@ -252,7 +253,7 @@ struct GlassSurface {
     outline: CompositionRoundedRectangleGeometry,
     rim: ShapeVisual,
     rim_geometry: CompositionRoundedRectangleGeometry,
-    inner_rim_geometry: Option<CompositionRoundedRectangleGeometry>,
+    extra_rims: Vec<(f32, CompositionRoundedRectangleGeometry)>,
 }
 
 impl GlassSurface {
@@ -302,37 +303,87 @@ impl GlassSurface {
         rim_shape.SetStrokeBrush(&rim_brush)?;
         rim_shape.SetStrokeThickness(stroke)?;
         let rim = c.CreateShapeVisual()?;
+        let mut extra_rims = Vec::new();
+        if theme.lens {
+            // Prismatic chromatic aberration dispersion rings (cyan/violet and
+            // rose/amber opposing diagonals) inspired by optical glass shaders
+            // like ybouane/liquidglass, rendered beneath the primary Fresnel rim.
+            let cool_scale = if theme.light { 1.0f32 } else { 0.85f32 };
+            let scale_a = |a: u8| (f32::from(a) * cool_scale).round().min(255.0) as u8;
+            let dispersion_passes: [(f32, Vector2, Vector2, [(f32, Color); 4]); 2] = [
+                (
+                    0.9,
+                    v2(0.0, 0.0),
+                    v2(1.0, 1.0),
+                    [
+                        (0.0, rgba(110, 215, 255, scale_a(135))),
+                        (0.34, rgba(110, 215, 255, 0)),
+                        (0.66, rgba(168, 132, 255, 0)),
+                        (1.0, rgba(168, 132, 255, scale_a(115))),
+                    ],
+                ),
+                (
+                    1.15,
+                    v2(1.0, 0.0),
+                    v2(0.0, 1.0),
+                    [
+                        (0.0, rgba(255, 158, 198, scale_a(112))),
+                        (0.35, rgba(255, 158, 198, 0)),
+                        (0.65, rgba(255, 218, 132, 0)),
+                        (1.0, rgba(255, 218, 132, scale_a(108))),
+                    ],
+                ),
+            ];
+            for (inset_mult, start, end, stops_spec) in dispersion_passes {
+                let brush = c.CreateLinearGradientBrush()?;
+                brush.SetStartPoint(start)?;
+                brush.SetEndPoint(end)?;
+                brush.SetInterpolationSpace(CompositionColorSpace::RgbLinear)?;
+                let stops = brush.ColorStops()?;
+                for (at, color) in stops_spec {
+                    stops.Append(&c.CreateColorGradientStopWithOffsetAndColor(at, color)?)?;
+                }
+                let geo = c.CreateRoundedRectangleGeometry()?;
+                let inset = stroke * inset_mult;
+                geo.SetOffset(v2(inset, inset))?;
+                geo.SetCornerRadius(v2((radius - inset).max(0.0), (radius - inset).max(0.0)))?;
+                let shape = c.CreateSpriteShapeWithGeometry(&geo)?;
+                shape.SetStrokeBrush(&brush)?;
+                shape.SetStrokeThickness(stroke * 1.25)?;
+                rim.Shapes()?.Append(&shape)?;
+                extra_rims.push((inset_mult, geo));
+            }
+        }
         rim.Shapes()?.Append(&rim_shape)?;
-        let inner_rim_geometry = if theme.lens {
-            // Concentric inner optical bevel lift (white 28% top -> clear -> 15% bottom caustic).
+        if theme.lens {
+            // Concentric inner optical bevel lift (white 30% top -> clear -> 16% bottom caustic).
             let inner_brush = c.CreateLinearGradientBrush()?;
             let (start, end) = reflection_axis(edge);
             inner_brush.SetStartPoint(start)?;
             inner_brush.SetEndPoint(end)?;
             let inner_stops = inner_brush.ColorStops()?;
-            for (at, alpha) in [(0.0, 72u8), (0.45, 0u8), (1.0, 38u8)] {
+            for (at, alpha) in [(0.0, 76u8), (0.45, 0u8), (1.0, 42u8)] {
                 inner_stops.Append(
                     &c.CreateColorGradientStopWithOffsetAndColor(at, rgba(255, 255, 255, alpha))?,
                 )?;
             }
             let inner_geo = c.CreateRoundedRectangleGeometry()?;
-            let inset = stroke * 1.5;
+            let inset_mult = 1.65;
+            let inset = stroke * inset_mult;
             inner_geo.SetOffset(v2(inset, inset))?;
             inner_geo.SetCornerRadius(v2((radius - inset).max(0.0), (radius - inset).max(0.0)))?;
             let inner_shape = c.CreateSpriteShapeWithGeometry(&inner_geo)?;
             inner_shape.SetStrokeBrush(&inner_brush)?;
             inner_shape.SetStrokeThickness(stroke)?;
             rim.Shapes()?.Append(&inner_shape)?;
-            Some(inner_geo)
-        } else {
-            None
-        };
+            extra_rims.push((inset_mult, inner_geo));
+        }
         Ok(Self {
             glass,
             outline,
             rim,
             rim_geometry,
-            inner_rim_geometry,
+            extra_rims,
         })
     }
 }
@@ -370,7 +421,7 @@ fn reflection_axis(edge: DockEdge) -> (Vector2, Vector2) {
 /// specular sheen on the dock (16 KB GPU texture, zero idle CPU overhead).
 fn specular_glint_brush(gfx: &Gfx, light: bool) -> Result<CompositionSurfaceBrush> {
     const SIDE: u32 = 64;
-    let peak = if light { 84.0f32 } else { 68.0f32 };
+    let peak = if light { 140.0f32 } else { 118.0f32 };
     let center = (SIDE as f32 - 1.0) / 2.0;
     let inv_r = 1.0 / center;
     let mut bgra = Vec::with_capacity((SIDE * SIDE * 4) as usize);
@@ -385,8 +436,12 @@ fn specular_glint_brush(gfx: &Gfx, light: bool) -> Result<CompositionSurfaceBrus
                 let falloff = (1.0 - r2) * (1.0 - r2);
                 (peak * falloff).round().clamp(0.0, 255.0) as u8
             };
-            // Premultiplied white in BGRA.
-            bgra.extend_from_slice(&[alpha, alpha, alpha, alpha]);
+            // Subtle prismatic dispersion fringe around the white specular core (strict BGRA premultiplied: B,G,R <= A).
+            let shift = (dx * 0.14).clamp(-0.14, 0.14);
+            let b = (f32::from(alpha) * (1.0 - shift.max(0.0))).round() as u8;
+            let g = alpha;
+            let r = (f32::from(alpha) * (1.0 + shift.min(0.0))).round() as u8;
+            bgra.extend_from_slice(&[b, g, r, alpha]);
         }
     }
     let image = IconImage {
@@ -773,9 +828,16 @@ pub struct Scene {
     frames: [Visual; 3],
     outline: CompositionRoundedRectangleGeometry,
     rim_geometry: CompositionRoundedRectangleGeometry,
-    inner_rim_geometry: Option<CompositionRoundedRectangleGeometry>,
+    extra_rims: Vec<(f32, CompositionRoundedRectangleGeometry)>,
     /// Pointer-reactive Liquid Glass specular highlight clipped inside `glass`.
     glint: Option<SpriteVisual>,
+    /// Underdamped momentum spring along the dock axis for `glint`.
+    glint_spring: Cell<Option<ElasticSpring>>,
+    /// Smoothed opacity (`0.0..=1.0`) for `glint` fade-in and fade-out.
+    glint_alpha: Cell<f32>,
+    /// Timestamp of the previous `apply` call for `glint` physics integration.
+    glint_last_time: Cell<Option<Instant>>,
+    glint_animating: Cell<bool>,
     content: ContainerVisual,
     /// Frame drawn around the icon a dragged app would join.
     merge: ShapeVisual,
@@ -798,6 +860,12 @@ pub struct Scene {
 }
 
 impl Scene {
+    /// Whether the Liquid Glass specular glint is still gliding or fading.
+    #[must_use]
+    pub fn is_glint_animating(&self) -> bool {
+        self.glint_animating.get()
+    }
+
     /// Where the slot is drawn now, along the dock, in dock coordinates.
     pub fn slot_along(&self, index: usize) -> Option<f32> {
         let offset = self.slots.get(index)?.Offset().ok()?;
@@ -848,13 +916,14 @@ impl Scene {
             outline,
             rim,
             rim_geometry,
-            inner_rim_geometry,
+            extra_rims,
         } = GlassSurface::build(gfx, theme, radius, stroke, frame.edge)?;
         let glint = if theme.lens {
             let brush = specular_glint_brush(gfx, theme.light)?;
             let visual = c.CreateSpriteVisual()?;
             let glint_size = layout.height * 2.2;
             visual.SetSize(v2(glint_size, glint_size))?;
+            visual.SetCenterPoint(Vector3::new(glint_size / 2.0, glint_size / 2.0, 0.0))?;
             visual.SetBrush(&brush)?;
             visual.SetOpacity(0.0)?;
             glass.Children()?.InsertAtTop(&visual)?;
@@ -947,8 +1016,12 @@ impl Scene {
             frames: [shadow_host.cast()?, glass.cast()?, rim.cast()?],
             outline,
             rim_geometry,
-            inner_rim_geometry,
+            extra_rims,
             glint,
+            glint_spring: Cell::new(None),
+            glint_alpha: Cell::new(0.0),
+            glint_last_time: Cell::new(None),
+            glint_animating: Cell::new(false),
             content,
             merge,
             merge_geometry,
@@ -1054,25 +1127,86 @@ impl Scene {
         self.outline.SetSize(size)?;
         self.rim_geometry
             .SetSize(v2(size.X - self.stroke, size.Y - self.stroke))?;
-        if let Some(inner) = &self.inner_rim_geometry {
-            let inset = self.stroke * 3.0;
-            inner.SetSize(v2((size.X - inset).max(0.0), (size.Y - inset).max(0.0)))?;
+        for (inset_mult, geo) in &self.extra_rims {
+            let inset = self.stroke * inset_mult * 2.0;
+            geo.SetSize(v2((size.X - inset).max(0.0), (size.Y - inset).max(0.0)))?;
         }
         if let Some(glint) = &self.glint {
-            if let Some(rect) = hovered.and_then(|index| state.rects.get(index)) {
-                let target_rect = place(*rect);
-                let glint_size = self.height * 2.2;
-                let cx = target_rect.x + target_rect.width / 2.0 - plate.x;
-                let cy = target_rect.y + target_rect.height / 2.0 - plate.y;
+            let now = Instant::now();
+            let dt = self
+                .glint_last_time
+                .replace(Some(now))
+                .map_or(0.0, |prev| now.saturating_duration_since(prev).as_secs_f32())
+                .clamp(0.0, 0.05);
+            let glint_size = self.height * 2.2;
+            let vertical = self.frame.edge.is_vertical();
+            let mut alpha = self.glint_alpha.get();
+            let place_glint = |pos: f32, vel: f32| -> Result<()> {
                 let (gx, gy) = match self.frame.edge {
-                    DockEdge::Bottom => (cx - glint_size / 2.0, -glint_size * 0.42),
-                    DockEdge::Left => (plate.width - glint_size * 0.58, cy - glint_size / 2.0),
-                    DockEdge::Right => (-glint_size * 0.42, cy - glint_size / 2.0),
+                    DockEdge::Bottom => (pos - glint_size / 2.0, -glint_size * 0.42),
+                    DockEdge::Left => (plate.width - glint_size * 0.58, pos - glint_size / 2.0),
+                    DockEdge::Right => (-glint_size * 0.42, pos - glint_size / 2.0),
+                };
+                let scale_along = 1.0 + (vel.abs() / 1800.0).min(0.45);
+                let scale_vec = if vertical {
+                    Vector3::new(1.0, scale_along, 1.0)
+                } else {
+                    Vector3::new(scale_along, 1.0, 1.0)
                 };
                 glint.SetOffset(v3(fit(gx), fit(gy)))?;
-                glint.SetOpacity(1.0)?;
+                glint.SetScale(scale_vec)?;
+                Ok(())
+            };
+
+            if let Some(rect) = hovered.and_then(|index| state.rects.get(index)) {
+                let target_rect = place(*rect);
+                let target_axis = if vertical {
+                    target_rect.y + target_rect.height / 2.0 - plate.y
+                } else {
+                    target_rect.x + target_rect.width / 2.0 - plate.x
+                };
+                let spring = match self.glint_spring.get() {
+                    Some(mut existing) if alpha > 0.001 => {
+                        existing.target = target_axis;
+                        existing.step(dt);
+                        existing
+                    }
+                    _ => ElasticSpring::at(target_axis, 18.0, 0.76),
+                };
+                self.glint_spring.set(Some(spring));
+
+                let fade_step = if dt > 0.0 {
+                    1.0 - (-18.0 * dt).exp()
+                } else {
+                    0.25
+                };
+                alpha = (alpha + (1.0 - alpha) * fade_step).clamp(0.0, 1.0);
+                if alpha > 0.995 {
+                    alpha = 1.0;
+                }
+                self.glint_alpha.set(alpha);
+
+                place_glint(spring.value, spring.velocity)?;
+                glint.SetOpacity(alpha)?;
+                self.glint_animating.set(alpha < 1.0 || !spring.is_settled());
             } else {
-                glint.SetOpacity(0.0)?;
+                alpha = if dt > 0.0 {
+                    (alpha * (-14.0 * dt).exp()).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                if alpha < 0.005 {
+                    alpha = 0.0;
+                    self.glint_spring.set(None);
+                    glint.SetScale(Vector3::new(1.0, 1.0, 1.0))?;
+                } else if let Some(mut spring) = self.glint_spring.get() {
+                    spring.step(dt);
+                    self.glint_spring.set(Some(spring));
+                    place_glint(spring.value, spring.velocity)?;
+                }
+                self.glint_alpha.set(alpha);
+                glint.SetOpacity(alpha)?;
+                self.glint_animating.set(alpha > 0.0);
             }
         }
 

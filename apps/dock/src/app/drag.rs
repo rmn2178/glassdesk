@@ -85,7 +85,7 @@ impl App {
         let state = magnify(
             &stage.layout,
             self.cursor,
-            self.amount.value,
+            self.amount.value.max(0.0),
             &stage.magnifier,
         );
         let explorer = explorer_id();
@@ -169,7 +169,9 @@ impl App {
         let Some(stage) = &self.stage else {
             return Ok(());
         };
-        self.cursor = stage.to_dock(point).0;
+        let along = stage.to_dock(point).0;
+        self.cursor = along;
+        self.cursor_spring.target = along;
         if !self.hovering {
             self.hovering = true;
             self.amount.target = 1.0;
@@ -195,7 +197,7 @@ impl App {
         let state = magnify(
             &stage.layout,
             self.cursor,
-            self.amount.value,
+            self.amount.value.max(0.0),
             &stage.magnifier,
         );
         let target = state
@@ -468,6 +470,11 @@ impl App {
 
     pub(super) fn on_release(&mut self) -> Result<Option<Outside>> {
         let press = self.press.take();
+        if self.press_index.is_some() {
+            self.press_scale.target = 1.0;
+            self.press_scale.impulse(3.2);
+            self.last_frame = Instant::now();
+        }
         // Sample the release position too: the final WM_MOUSEMOVE can be
         // coalesced or delivered to another window outside this dock.
         let positioned = if self.drag.is_some() {

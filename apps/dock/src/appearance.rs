@@ -84,7 +84,7 @@ fn decode(stored: u8) -> Appearance {
 #[must_use]
 pub fn resolve(choice: Appearance, system_light: bool, glass: bool) -> Look {
     let (material, light) = match choice {
-        Appearance::Auto => (Material::Standard, system_light),
+        Appearance::Auto => (Material::LiquidGlass, system_light),
         Appearance::Light => (Material::Standard, true),
         Appearance::Dark => (Material::Standard, false),
         Appearance::Frosted => (Material::Frosted, system_light),

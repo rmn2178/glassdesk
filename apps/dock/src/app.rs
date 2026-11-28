@@ -47,7 +47,7 @@ use nosih_core::{
     layout::{ItemKind, Layout, Rect},
     magnify::Magnifier,
     roster::Roster,
-    spring::Spring,
+    spring::{ElasticSpring, Spring},
 };
 use nosih_shell::{
     appbar::AppBar,
@@ -149,7 +149,12 @@ const TASKBAR_PREFS_CHANGED: u32 = WM_APP + 10;
 /// Magnification range, in icons on either side of the cursor.
 const RANGE_IN_ICONS: f32 = 3.0;
 /// Speed of magnification entry and exit (about 200 ms).
-const HOVER_OMEGA: f32 = 28.0;
+const HOVER_OMEGA: f32 = 22.0;
+const HOVER_DAMPING: f32 = 0.64;
+const CURSOR_OMEGA: f32 = 24.0;
+const CURSOR_DAMPING: f32 = 0.72;
+const PRESS_OMEGA: f32 = 28.0;
+const PRESS_DAMPING: f32 = 0.56;
 /// Bounce height as a fraction of the icon size.
 const BOUNCE_HEIGHT: f32 = 0.5;
 const LAUNCH_BOUNCE_LIMIT: f32 = 10.0;
@@ -777,8 +782,13 @@ pub(crate) struct App {
     welcome_tries: u8,
     /// Horizontal cursor position relative to the resting dock.
     cursor: f32,
-    /// 0 = resting, 1 = full magnification.
-    amount: Spring,
+    /// Underdamped fluid momentum tracker following `cursor` across the dock.
+    cursor_spring: ElasticSpring,
+    /// 0 = resting, 1 = full magnification (elastic liquid bounce).
+    amount: ElasticSpring,
+    /// Elastic press squish & rebound scale for the clicked dock icon.
+    press_scale: ElasticSpring,
+    press_index: Option<usize>,
     last_frame: Instant,
 }
 

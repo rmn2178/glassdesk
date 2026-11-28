@@ -77,7 +77,7 @@ impl App {
         };
 
         // Keep the active-area boundary aligned with the icons as they grow.
-        let rise = stage.icon * (stage.magnifier.max_scale - 1.0) * self.amount.value;
+        let rise = stage.icon * (stage.magnifier.max_scale - 1.0) * self.amount.value.max(0.0);
         let (along, across) = stage.to_dock(point);
         if self.hovering && across < -rise - LEAVE_HALO * stage.scale {
             return self.on_mouse_leave();
@@ -86,8 +86,16 @@ impl App {
         self.cursor = along;
         if !self.hovering {
             self.hovering = true;
+            self.cursor_spring = nosih_core::spring::ElasticSpring::at(
+                along,
+                super::CURSOR_OMEGA,
+                super::CURSOR_DAMPING,
+            );
             self.amount.target = 1.0;
             self.slide.target = 0.0;
+            self.last_frame = Instant::now();
+        } else {
+            self.cursor_spring.target = along;
             self.last_frame = Instant::now();
             // SAFETY: Timer on our own window; killing a timer that is not set is harmless.
             unsafe {
@@ -174,6 +182,9 @@ impl App {
     }
 
     pub(super) fn on_press(&mut self) -> Result<()> {
+        if let Some(spotlight) = &mut self.spotlight {
+            let _ = spotlight.close();
+        }
         self.close_preview();
         // Any press on the dock closes an unfolded group; on the group
         // itself, `on_click` then leaves it closed.
@@ -186,6 +197,9 @@ impl App {
             return Ok(());
         };
         let draggable = self.is_draggable(entry);
+        self.press_index = self.hovered;
+        self.press_scale.target = 0.84;
+        self.last_frame = Instant::now();
         self.press = entry.id.clone().map(|id| Press { id, at, draggable });
         if self.press.is_some() {
             // Capture is best effort: this non-activating window also polls

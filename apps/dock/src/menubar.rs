@@ -769,6 +769,7 @@ pub struct MenuBar {
     usage_viewport: Option<UsageViewport>,
     suppress_volume_release: bool,
     panel: Option<Island>,
+    last_animated_panel: Option<Island>,
     visual_height: i32,
     triggers_span: Span,
     panel_span: Span,
@@ -1470,6 +1471,7 @@ impl MenuBar {
             usage_viewport: None,
             suppress_volume_release: false,
             panel: None,
+            last_animated_panel: None,
             visual_height: 0,
             triggers_span: Span::default(),
             panel_span: Span::default(),
@@ -1965,6 +1967,7 @@ impl MenuBar {
     pub fn dismiss_island(&mut self, gfx: &Gfx) -> Result<()> {
         self.release_volume(None)?;
         self.brightness_target = None;
+        self.last_animated_panel = None;
         // SAFETY: Cancels our own one-shot banner timer if active.
         unsafe {
             let _ = KillTimer(Some(self.hwnd), NOTIFICATION_BANNER_TIMER);
@@ -2262,6 +2265,7 @@ impl MenuBar {
         self.notifications.dismiss_banner();
         if self.panel == Some(Island::NotificationBanner) {
             self.panel = None;
+            self.last_animated_panel = None;
             if std::mem::take(&mut self.banner_revealed) && self.auto_hide {
                 self.revealed = false;
             }
@@ -3404,6 +3408,8 @@ impl MenuBar {
                 left: 0.0,
                 right: width,
             };
+        } else {
+            self.last_animated_panel = None;
         }
         if look.widgets.rounded_corners && corner_r > 0.0 {
             self.draw_screen_corners(gfx, &layers, width, corner_r)?;
@@ -3704,6 +3710,30 @@ impl MenuBar {
         Ok(())
     }
 
+    fn maybe_animate_popup(
+        &mut self,
+        c: &Compositor,
+        popup: &ContainerVisual,
+        geometry: IslandGeometry,
+        island: Island,
+    ) -> Result<()> {
+        if matches!(
+            island,
+            Island::ControlCenter
+                | Island::Notifications
+                | Island::NotificationBanner
+                | Island::SystemMenu
+                | Island::AppMenu(_)
+        ) && self.last_animated_panel != Some(island)
+        {
+            self.last_animated_panel = Some(island);
+            if system::animations_enabled() {
+                animate_popup_entrance(c, popup, geometry)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Renders the top-left macOS-style Nosih system menu (About, Settings,
     /// Sleep, Restart, Shut Down, Lock Screen, Force Quit).
     fn draw_system_menu(
@@ -3728,7 +3758,9 @@ impl MenuBar {
             light: look.light,
             glass: look.glass,
         });
-        let content = popup_surface(gfx, theme, layers, geometry, height, px(14.0))?;
+        let (popup, content) =
+            popup_surface_visual(gfx, theme, layers, geometry, height, px(14.0))?;
+        self.maybe_animate_popup(&gfx.compositor, &popup, geometry, Island::SystemMenu)?;
         let c = &gfx.compositor;
         let ink = geometry.ink();
         let t = strings::text();
@@ -3839,7 +3871,9 @@ impl MenuBar {
             light: look.light,
             glass: look.glass,
         });
-        let content = popup_surface(gfx, theme, layers, geometry, height, px(14.0))?;
+        let (popup, content) =
+            popup_surface_visual(gfx, theme, layers, geometry, height, px(14.0))?;
+        self.maybe_animate_popup(&gfx.compositor, &popup, geometry, Island::AppMenu(kind))?;
         let c = &gfx.compositor;
         let ink = geometry.ink();
         let t = strings::text();
@@ -3983,7 +4017,14 @@ impl MenuBar {
             light: look.light,
             glass: look.glass,
         });
-        let content = popup_surface(gfx, theme, layers, geometry, height, px(PANEL_RADIUS))?;
+        let (popup, content) =
+            popup_surface_visual(gfx, theme, layers, geometry, height, px(PANEL_RADIUS))?;
+        self.maybe_animate_popup(
+            &gfx.compositor,
+            &popup,
+            geometry,
+            Island::NotificationBanner,
+        )?;
         let c = &gfx.compositor;
         let ink = geometry.ink();
 
@@ -4115,7 +4156,9 @@ impl MenuBar {
             light: look.light,
             glass: look.glass,
         });
-        let content = popup_surface(gfx, theme, layers, geometry, height, px(PANEL_RADIUS))?;
+        let (popup, content) =
+            popup_surface_visual(gfx, theme, layers, geometry, height, px(PANEL_RADIUS))?;
+        self.maybe_animate_popup(&gfx.compositor, &popup, geometry, Island::Notifications)?;
         let c = &gfx.compositor;
         let ink = geometry.ink();
         let t = strings::text();
@@ -4503,7 +4546,9 @@ impl MenuBar {
             light: look.light,
             glass: look.glass,
         });
-        let content = popup_surface(gfx, theme, layers, geometry, height, px(PANEL_RADIUS))?;
+        let (popup, content) =
+            popup_surface_visual(gfx, theme, layers, geometry, height, px(PANEL_RADIUS))?;
+        self.maybe_animate_popup(&gfx.compositor, &popup, geometry, Island::ControlCenter)?;
         let c = &gfx.compositor;
         let ink = geometry.ink();
         let t = strings::text();
@@ -6348,6 +6393,18 @@ fn popup_surface(
     height: f32,
     radius: f32,
 ) -> Result<VisualCollection> {
+    let (_, children) = popup_surface_visual(gfx, theme, layers, geometry, height, radius)?;
+    Ok(children)
+}
+
+fn popup_surface_visual(
+    gfx: &Gfx,
+    theme: Theme,
+    layers: &VisualCollection,
+    geometry: IslandGeometry,
+    height: f32,
+    radius: f32,
+) -> Result<(ContainerVisual, VisualCollection)> {
     let c = &gfx.compositor;
     let size = Vector2::new(geometry.width, height);
     let panel = theme.panel(gfx, size, radius, geometry.scale)?;
@@ -6361,7 +6418,47 @@ fn popup_surface(
     children.InsertAtTop(&island_shadow(c, &mask.cast()?, size, geometry)?)?;
     children.InsertAtTop(&panel)?;
     layers.InsertAtTop(&popup)?;
-    Ok(children)
+    Ok((popup, children))
+}
+
+fn animate_popup_entrance(
+    c: &Compositor,
+    popup: &ContainerVisual,
+    geometry: IslandGeometry,
+) -> Result<()> {
+    popup.SetCenterPoint(Vector3::new(geometry.width / 2.0, 0.0, 0.0))?;
+    let spring_ease =
+        c.CreateCubicBezierEasingFunction(Vector2::new(0.22, 1.0), Vector2::new(0.36, 1.0))?;
+    let settle_ease =
+        c.CreateCubicBezierEasingFunction(Vector2::new(0.3, 0.0), Vector2::new(0.2, 1.0))?;
+    let duration = TimeSpan {
+        Duration: 190 * 10_000,
+    };
+
+    let scale_anim = c.CreateVector3KeyFrameAnimation()?;
+    scale_anim.SetDuration(duration)?;
+    scale_anim.InsertKeyFrame(0.0, Vector3::new(0.95, 0.95, 1.0))?;
+    scale_anim.InsertKeyFrameWithEasingFunction(
+        0.68,
+        Vector3::new(1.012, 1.012, 1.0),
+        &spring_ease,
+    )?;
+    scale_anim.InsertKeyFrameWithEasingFunction(1.0, Vector3::new(1.0, 1.0, 1.0), &settle_ease)?;
+
+    let slide_anim = c.CreateScalarKeyFrameAnimation()?;
+    slide_anim.SetDuration(duration)?;
+    slide_anim.InsertKeyFrame(0.0, geometry.top - 8.0 * geometry.scale)?;
+    slide_anim.InsertKeyFrameWithEasingFunction(1.0, geometry.top, &spring_ease)?;
+
+    let fade_anim = c.CreateScalarKeyFrameAnimation()?;
+    fade_anim.SetDuration(duration)?;
+    fade_anim.InsertKeyFrame(0.0, 0.0)?;
+    fade_anim.InsertKeyFrameWithEasingFunction(1.0, 1.0, &spring_ease)?;
+
+    popup.StartAnimation(h!("Scale"), &scale_anim)?;
+    popup.StartAnimation(h!("Offset.Y"), &slide_anim)?;
+    popup.StartAnimation(h!("Opacity"), &fade_anim)?;
+    Ok(())
 }
 
 fn island_shadow(

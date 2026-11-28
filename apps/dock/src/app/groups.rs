@@ -37,7 +37,7 @@ impl App {
         let state = magnify(
             &stage.layout,
             self.cursor,
-            self.amount.value,
+            self.amount.value.max(0.0),
             &stage.magnifier,
         );
         let Some(rect) = state.rects.get(index) else {

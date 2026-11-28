@@ -139,7 +139,22 @@ impl Fixture {
             moments: crate::moments::Moments::default(),
             welcome_tries: 0,
             cursor: 0.0,
-            amount: Spring::at(0.0, HOVER_OMEGA),
+            cursor_spring: nosih_core::spring::ElasticSpring::at(
+                0.0,
+                crate::app::CURSOR_OMEGA,
+                crate::app::CURSOR_DAMPING,
+            ),
+            amount: nosih_core::spring::ElasticSpring::at(
+                0.0,
+                HOVER_OMEGA,
+                crate::app::HOVER_DAMPING,
+            ),
+            press_scale: nosih_core::spring::ElasticSpring::at(
+                1.0,
+                crate::app::PRESS_OMEGA,
+                crate::app::PRESS_DAMPING,
+            ),
+            press_index: None,
             last_frame: Instant::now(),
         };
         Ok(Self {

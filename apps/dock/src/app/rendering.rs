@@ -353,7 +353,7 @@ impl App {
             {
                 return None;
             }
-            let state = magnify(&dock, self.cursor, self.amount.value, &magnifier);
+            let state = magnify(&dock, self.cursor, self.amount.value.max(0.0), &magnifier);
             let offsets: Vec<f32> = key
                 .entries
                 .iter()
@@ -501,10 +501,21 @@ impl App {
         };
         let mut state = magnify(
             &stage.layout,
-            self.cursor,
-            self.amount.value,
+            self.cursor_spring.value,
+            self.amount.value.max(0.0),
             &stage.magnifier,
         );
+        if let Some(idx) = self.press_index
+            && let Some(rect) = state.rects.get_mut(idx)
+        {
+            let s = self.press_scale.value.clamp(0.75, 1.18);
+            let nw = rect.width * s;
+            let nh = rect.height * s;
+            rect.x += (rect.width - nw) / 2.0;
+            rect.y += (rect.height - nh) / 2.0;
+            rect.width = nw;
+            rect.height = nh;
+        }
         let now = Instant::now();
         if let Some(motion) = &stage.reorder {
             let elapsed = now.saturating_duration_since(motion.started);
@@ -571,7 +582,10 @@ impl App {
                 .iter()
                 .position(|entry| entry.id.as_deref() == Some(view.group_id.as_str()))
         });
-        let at_rest = self.amount.value == 0.0
+        let at_rest = self.amount.is_settled()
+            && self.amount.value == 0.0
+            && self.cursor_spring.is_settled()
+            && self.press_scale.is_settled()
             && self.bounces.is_empty()
             && self.slide.is_settled()
             && stage.reorder.is_none()
