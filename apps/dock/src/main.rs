@@ -56,12 +56,24 @@ use windows::{
                 DispatcherQueueOptions,
             },
         },
-        UI::HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext},
+        UI::{
+            HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext},
+            WindowsAndMessaging::{MSG, PM_NOREMOVE, PeekMessageW},
+        },
     },
     core::{Owned, w},
 };
 
 fn main() -> Result<()> {
+    // Immediately tell win32k this GUI-subsystem process has initialized its
+    // message queue so headless background workers (--usage-worker, --usb,
+    // --accessories, --shell-worker, --guard) never trigger Windows' 5-second
+    // IDC_APPSTARTING loading-spinner cursor.
+    // SAFETY: Non-destructive peek on the calling thread's own message queue.
+    unsafe {
+        let mut msg = MSG::default();
+        let _ = PeekMessageW(&mut msg, None, 0, 0, PM_NOREMOVE);
+    }
     // Suppress system modal error dialogs (missing DLLs, missing ordinals in 3rd-party shell extensions).
     // SAFETY: Affects process-level error mode without side effects on memory or concurrency.
     unsafe {

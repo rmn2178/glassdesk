@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use anyhow::Result;
 use nosih_config::DockPosition;
-use nosih_core::{frame::DockEdge, layout::Rect, spring::ElasticSpring};
+use nosih_core::{frame::DockEdge, layout::Rect, spring::{ElasticSpring, Spring}};
 use nosih_shell::{
     appbar::ABN_FULLSCREENAPP,
     system::{Monitor, monitor_at, monitor_rects, primary_monitor},

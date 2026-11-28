@@ -137,7 +137,9 @@ pub(super) fn message_loop() {
                 }
                 with_app_then("animación", App::tick);
                 // Wait for the next refresh to pace animation without timers.
-                let _ = DwmFlush();
+                if DwmFlush().is_err() {
+                    thread::sleep(std::time::Duration::from_millis(16));
+                }
             } else {
                 let status = GetMessageW(&mut msg, None, 0, 0);
                 if status.0 <= 0 {

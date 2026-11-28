@@ -83,6 +83,7 @@ impl App {
             return self.on_mouse_leave();
         }
 
+        let was_animating = self.is_animating();
         self.cursor = along;
         if !self.hovering {
             self.hovering = true;
@@ -93,21 +94,29 @@ impl App {
             );
             self.amount.target = 1.0;
             self.slide.target = 0.0;
-            self.last_frame = Instant::now();
-        } else {
-            self.cursor_spring.target = along;
-            self.last_frame = Instant::now();
+            if !was_animating {
+                self.last_frame = Instant::now();
+            }
             // SAFETY: Timer on our own window; killing a timer that is not set is harmless.
             unsafe {
                 let _ = KillTimer(Some(self.input), HIDE_TIMER);
             }
             self.place_windows()?;
+        } else {
+            self.cursor_spring.target = along;
+            if !was_animating {
+                self.last_frame = Instant::now();
+            }
         }
         // Every move, not only on entering: a menu or a drag that captures
         // the mouse cancels the request, and without it the dock would
         // never hear the pointer leave and stay magnified.
         self.track_leave()?;
-        self.render()?;
+        // When already animating, let `App::tick()` render once per DwmFlush VSync
+        // instead of re-rendering synchronously at raw 125-1000 Hz mouse rate.
+        if !was_animating {
+            self.render()?;
+        }
         self.aim_preview();
         Ok(())
     }

@@ -733,6 +733,8 @@ pub struct MenuBar {
     /// it lives outside `widgets` and changing it redraws nothing.
     clock_target: Option<String>,
     usage: Option<UsageMonitor>,
+    cached_providers: ActiveProviders,
+    providers_checked_at: Option<Instant>,
     /// Where each provider sits in the closed island, as screen x.
     usage_anchors: Vec<(Provider, i32)>,
     /// A moment for the crab, waiting for the dock (see `take_cue`).
@@ -1441,6 +1443,8 @@ impl MenuBar {
             widgets,
             clock_target: None,
             usage: usage_enabled.then(|| UsageMonitor::new(hwnd.0 as isize, USAGE_CHANGED)),
+            cached_providers: ActiveProviders::default(),
+            providers_checked_at: None,
             usage_anchors: Vec::new(),
             cue: None,
             online: None,
@@ -2733,8 +2737,17 @@ impl MenuBar {
             return Ok(());
         };
         let active_providers = if self.usage.is_some() {
-            usage::active_providers()
+            let stale = self
+                .providers_checked_at
+                .is_none_or(|at| at.elapsed() >= Duration::from_secs(15));
+            if stale {
+                self.cached_providers = usage::active_providers();
+                self.providers_checked_at = Some(Instant::now());
+            }
+            self.cached_providers
         } else {
+            self.cached_providers = ActiveProviders::default();
+            self.providers_checked_at = None;
             ActiveProviders::default()
         };
         let track = self.media.as_ref().and_then(media::Watch::snapshot);
